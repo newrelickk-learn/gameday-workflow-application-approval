@@ -1,0 +1,73 @@
+from sqlalchemy import Column, String, Integer, Float, Date, DateTime
+from sqlalchemy.sql import func
+from datetime import datetime
+import enum
+
+from app.db.base import Base
+
+
+class ApplicationType(str, enum.Enum):
+    """申請タイプ"""
+    BUSINESS_TRIP = "business-trip"
+    EXPENSE = "expense"
+    VACATION = "vacation"
+    PROMOTION = "promotion"
+    
+    @property
+    def display_name(self) -> str:
+        """申請タイプの表示名を返す"""
+        mapping = {
+            ApplicationType.BUSINESS_TRIP: "出張申請",
+            ApplicationType.EXPENSE: "経費申請",
+            ApplicationType.VACATION: "有給休暇申請",
+            ApplicationType.PROMOTION: "プロモーション申請",
+        }
+        return mapping.get(self, self.value)
+
+
+class ApplicationStatus(str, enum.Enum):
+    """申請ステータス"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class Application(Base):
+    """申請モデル"""
+    __tablename__ = "applications"
+
+    id = Column(String, primary_key=True, index=True)
+    type = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    
+    # オプショナルフィールド
+    amount = Column(Float, nullable=True)
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
+    days = Column(Integer, nullable=True)
+    
+    # ステータス（String型として保存）
+    status = Column(
+        String(20),
+        nullable=False,
+        default=ApplicationStatus.PENDING.value,  # Enumの値を明示的に使用
+        index=True
+    )
+    
+    # 申請者情報
+    applicant_id = Column(String, nullable=False, index=True)
+    applicant_name = Column(String, nullable=True)
+    applicant_department = Column(String, nullable=True)
+    
+    # 承認フロー情報
+    current_step = Column(Integer, nullable=True)
+    total_steps = Column(Integer, nullable=True)
+    next_approver_id = Column(String, nullable=True)
+    next_approver_name = Column(String, nullable=True)
+    next_approver_department = Column(String, nullable=True)
+    
+    # タイムスタンプ
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+

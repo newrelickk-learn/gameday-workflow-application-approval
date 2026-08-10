@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  application-approval-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gameday-workflow-application-approval-service:latest
+    container_name: gameday-workflow-application-approval-service
+    platform: linux/arm64  # ローカル用（Mac）
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://gameday_user:gameday_password@gameday_workflow_db:5432/gameday_workflow_application}
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - USER_SERVICE_API_KEY=${USER_SERVICE_API_KEY:-InternalServiceApiKeyForGameDayWorkflow2024!}
+      - DEBUG=${DEBUG:-false}
+    volumes:
+      - ./app:/app/app  # 開発時にコード変更を反映
+    restart: unless-stopped
+    networks:
+      - gameday-workflow-network
+
+  # テスト用curlコンテナ
+  test-curl:
+    image: curlimages/curl:latest
+    container_name: gameday-workflow-test-curl
+    platform: linux/arm64  # ローカル用（Mac）
+    command: sleep infinity  # コンテナを起動し続ける
+    networks:
+      - gameday-workflow-network
+    profiles:
+      - test  # テスト時のみ起動
+
+networks:
+  gameday-workflow-network:
+    name: gameday-workflow-network
+    external: true
+

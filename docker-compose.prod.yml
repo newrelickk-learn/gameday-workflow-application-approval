@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  application-approval-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gameday-workflow-application-approval-service:latest
+    container_name: gameday-workflow-application-approval-service
+    platform: linux/amd64  # 本番用（x86-64）
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=false
+    restart: unless-stopped
+    networks:
+      - gameday-workflow-network
+
+networks:
+  gameday-workflow-network:
+    external: false
+

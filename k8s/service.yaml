@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gameday-workflow-application-approval
+  namespace: gameday-workflow
+  labels:
+    app: gameday-workflow-application-approval
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8002
+      targetPort: 8002
+      protocol: TCP
+      name: http
+  selector:
+    app: gameday-workflow-application-approval

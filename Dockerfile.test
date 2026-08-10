@@ -1,0 +1,19 @@
+# シナリオテスト実行用（pytest）。本番イメージに tests と dev 依存を追加。
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y gcc postgresql-client && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir -r requirements-dev.txt
+
+COPY app/ ./app/
+COPY tests/ ./tests/
+COPY pytest.ini ./
+
+ENV DATABASE_URL=sqlite:///:memory:
+ENV USER_SERVICE_USE_STUB=true
+ENV WORKFLOW_SERVICE_USE_STUB=true
+
+CMD ["pytest", "tests/", "-v", "--no-cov"]

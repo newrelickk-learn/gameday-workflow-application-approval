@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gameday-workflow-application-approval
+  namespace: gameday-workflow
+  labels:
+    app: gameday-workflow-application-approval
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gameday-workflow-application-approval
+  template:
+    metadata:
+      labels:
+        app: gameday-workflow-application-approval
+    spec:
+      containers:
+        - name: gameday-workflow-application-approval
+          # CIのdeploy.ymlが `kubectl set image` で実際のECRイメージに差し替える。初回applyのみこのタグが使われる。
+          image: gameday-workflow-application-approval:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8002
+              name: http
+          env:
+            - name: DEBUG
+              value: "false"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: NEW_RELIC_APP_NAME
+              value: "gameday-workflow-application-approval"
+            - name: NEW_RELIC_CONFIG_FILE
+              value: "/app/newrelic.ini"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: gameday-workflow-application-approval-secrets
+                  key: database-url
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gameday-workflow-application-approval-secrets
+                  key: secret-key
+            - name: USER_SERVICE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gameday-workflow-application-approval-secrets
+                  key: user-service-api-key
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gameday-workflow-application-approval-secrets
+                  key: new-relic-license-key
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 5

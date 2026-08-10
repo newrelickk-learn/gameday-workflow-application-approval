@@ -1,0 +1,384 @@
+openapi: 3.0.3
+info:
+  title: Application & Approval Service API
+  description: |
+    GameDay Workflow システムの申請・承認管理サービスAPI
+    申請の作成、取得、承認の管理を提供します。
+  version: 1.0.0
+  contact:
+    name: GameDay Workflow Team
+servers:
+  - url: http://localhost:8002
+    description: ローカル開発環境
+  - url: https://api.gameday-workflow.example.com/application-service
+    description: 本番環境
+
+tags:
+  - name: Applications
+    description: 申請関連のエンドポイント
+  - name: Approvals
+    description: 承認関連のエンドポイント
+
+paths:
+  /applications:
+    get:
+      tags:
+        - Applications
+      summary: 申請一覧取得
+      description: すべての申請を取得します
+      operationId: getApplications
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: 申請ステータスでフィルタリング
+          required: false
+          schema:
+            $ref: '#/components/schemas/ApplicationStatus'
+        - name: applicantId
+          in: query
+          description: 申請者IDでフィルタリング
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 申請一覧取得成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Application'
+              example:
+                - id: "1"
+                  type: "business-trip"
+                  title: "東京出張申請"
+                  description: "技術カンファレンス参加のため東京へ出張"
+                  startDate: "2024-04-15"
+                  endDate: "2024-04-17"
+                  days: 3
+                  status: "pending"
+                  applicantId: "28151"
+                  applicantName: "開発エンジニア"
+                  applicantDepartment: "開発組織"
+                  currentStep: 1
+                  totalSteps: 1
+                  nextApproverId: "21051"
+                  nextApproverName: "上長"
+                  nextApproverDepartment: "開発組織"
+                  createdAt: "2024-04-01T00:00:00Z"
+                  updatedAt: "2024-04-01T00:00:00Z"
+        '401':
+          description: 認証が必要です
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags:
+        - Applications
+      summary: 申請作成
+      description: 新しい申請を作成します
+      operationId: createApplication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApplicationRequest'
+            example:
+              type: "business-trip"
+              title: "東京出張申請"
+              description: "技術カンファレンス参加のため東京へ出張"
+              startDate: "2024-04-15"
+              endDate: "2024-04-17"
+              days: 3
+              applicantId: "28151"
+      responses:
+        '201':
+          description: 申請作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          description: リクエストが不正です
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "VALIDATION_ERROR"
+                message: "申請タイプが不正です"
+        '401':
+          description: 認証が必要です
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /applications/{id}:
+    get:
+      tags:
+        - Applications
+      summary: 申請詳細取得
+      description: 申請IDを指定して申請の詳細情報を取得します
+      operationId: getApplication
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 申請ID
+          schema:
+            type: string
+            example: "1"
+      responses:
+        '200':
+          description: 申請詳細取得成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+              example:
+                id: "1"
+                type: "business-trip"
+                title: "東京出張申請"
+                description: "技術カンファレンス参加のため東京へ出張"
+                startDate: "2024-04-15"
+                endDate: "2024-04-17"
+                days: 3
+                status: "pending"
+                applicantId: "28151"
+                applicantName: "開発エンジニア"
+                applicantDepartment: "開発組織"
+                currentStep: 1
+                totalSteps: 1
+                nextApproverId: "21051"
+                nextApproverName: "上長"
+                nextApproverDepartment: "開発組織"
+                createdAt: "2024-04-01T00:00:00Z"
+                updatedAt: "2024-04-01T00:00:00Z"
+        '401':
+          description: 認証が必要です
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 申請が見つかりません
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Application not found"
+                message: "指定された申請IDの申請が見つかりません"
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWTトークンによる認証
+
+  schemas:
+    Application:
+      type: object
+      required:
+        - id
+        - type
+        - title
+        - description
+        - status
+        - applicantId
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          description: 申請ID
+          example: "1"
+        type:
+          type: string
+          description: 申請タイプ（business-trip, expense, vacation, promotion等）
+          example: "business-trip"
+        title:
+          type: string
+          description: 申請タイトル
+          example: "東京出張申請"
+        description:
+          type: string
+          description: 申請内容の説明
+          example: "技術カンファレンス参加のため東京へ出張"
+        amount:
+          type: number
+          format: float
+          nullable: true
+          description: 金額（経費精算の場合）
+          example: 85000
+        startDate:
+          type: string
+          format: date
+          nullable: true
+          description: 開始日（有給休暇・出張の場合）
+          example: "2024-04-15"
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          description: 終了日（有給休暇・出張の場合）
+          example: "2024-04-17"
+        days:
+          type: integer
+          nullable: true
+          description: 日数（有給休暇・出張の場合）
+          example: 3
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        applicantId:
+          type: string
+          description: 申請者ID
+          example: "28151"
+        applicantName:
+          type: string
+          nullable: true
+          description: 申請者名（表示用）
+          example: "開発エンジニア"
+        applicantDepartment:
+          type: string
+          nullable: true
+          description: 申請者所属（表示用）
+          example: "開発組織"
+        currentStep:
+          type: integer
+          nullable: true
+          description: 現在の承認ステップ
+          example: 1
+        totalSteps:
+          type: integer
+          nullable: true
+          description: 総承認ステップ数
+          example: 1
+        nextApproverId:
+          type: string
+          nullable: true
+          description: 次の承認者ID
+          example: "21051"
+        nextApproverName:
+          type: string
+          nullable: true
+          description: 次の承認者名（表示用）
+          example: "上長"
+        nextApproverDepartment:
+          type: string
+          nullable: true
+          description: 次の承認者所属（表示用）
+          example: "開発組織"
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成日時
+          example: "2024-04-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時
+          example: "2024-04-01T00:00:00Z"
+
+    CreateApplicationRequest:
+      type: object
+      required:
+        - type
+        - title
+        - description
+        - applicantId
+      properties:
+        type:
+          type: string
+          description: 申請タイプ（business-trip, expense, vacation, promotion等）
+          example: "business-trip"
+        title:
+          type: string
+          description: 申請タイトル
+          example: "東京出張申請"
+        description:
+          type: string
+          description: 申請内容の説明
+          example: "技術カンファレンス参加のため東京へ出張"
+        amount:
+          type: number
+          format: float
+          nullable: true
+          description: 金額（経費精算の場合）
+          example: 85000
+        startDate:
+          type: string
+          format: date
+          nullable: true
+          description: 開始日（有給休暇・出張の場合）
+          example: "2024-04-15"
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          description: 終了日（有給休暇・出張の場合）
+          example: "2024-04-17"
+        days:
+          type: integer
+          nullable: true
+          description: 日数（有給休暇・出張の場合）
+          example: 3
+        applicantId:
+          type: string
+          description: 申請者ID
+          example: "28151"
+
+    ApplicationStatus:
+      type: string
+      enum:
+        - pending
+        - approved
+        - rejected
+      description: 申請ステータス
+      example: pending
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: エラーコード
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: エラーメッセージ
+          example: "申請タイプが不正です"
+
