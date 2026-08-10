@@ -97,7 +97,10 @@ jobs:
 
       - name: Deploy to Kubernetes
         run: |
-          kubectl set image deployment/${{ env.K8S_DEPLOYMENT }} ${{ env.K8S_DEPLOYMENT }}=${{ needs.build.outputs.image }} -n ${{ env.K8S_NAMESPACE }}
+          sed -i "s|image: .*|image: ${{ needs.build.outputs.image }}|" k8s/deployment.yaml
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
           kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT }} -n ${{ env.K8S_NAMESPACE }}
 
       - name: Create deployment marker in New Relic
