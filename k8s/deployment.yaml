@@ -32,6 +32,13 @@ spec:
               value: "gameday-workflow-application-approval"
             - name: NEW_RELIC_CONFIG_FILE
               value: "/app/newrelic.ini"
+            # コード側のデフォルト値はdocker-compose用のコンテナ名（workflow-notification-service,
+            # gameday_workflow_user_api）を指しており、k8s上の実際のService名とは異なるため
+            # DNS解決に失敗する。明示的に実際のService名を指定する。
+            - name: WORKFLOW_SERVICE_BASE_URL
+              value: "http://gameday-workflow-workflow-notification:8003"
+            - name: USER_SERVICE_BASE_URL
+              value: "http://gameday-workflow-user:80"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
