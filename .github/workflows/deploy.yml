@@ -95,6 +95,14 @@ jobs:
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
 
+      - name: Ensure New Relic license key secret
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl create secret generic gameday-workflow-newrelic-secrets \
+            -n ${{ env.K8S_NAMESPACE }} \
+            --from-literal=license-key=${{ secrets.NEW_RELIC_LICENSE_KEY }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy to Kubernetes
         run: |
           sed -i "s|image: .*|image: ${{ needs.build.outputs.image }}|" k8s/deployment.yaml
