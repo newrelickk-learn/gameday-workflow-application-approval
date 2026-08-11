@@ -97,11 +97,11 @@ class ValidationService:
                     field="endDate"
                 )
             
-            # 開始日 < 終了日のチェック
-            if start_date >= end_date:
+            # 開始日 <= 終了日のチェック（開始日と終了日が同じ日帰りは許可する）
+            if start_date > end_date:
                 raise ValidationError(
                     error_code="INVALID_DATE_RANGE",
-                    message="開始日は終了日より前である必要があります",
+                    message="開始日は終了日以前である必要があります",
                     field="startDate"
                 )
             
