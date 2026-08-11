@@ -185,6 +185,7 @@ async def create_application(
         return Application.model_validate(application)
     except ValidationError as e:
         newrelic.agent.add_custom_attribute('validation_error', e.error_code)
+        newrelic.agent.add_custom_attribute('validation_message', e.message)
         # 国内出張バグ調査用のカスタム属性（開始日・終了日・日数差分）
         newrelic.agent.add_custom_attribute('req_start_date', str(application_data.start_date))
         newrelic.agent.add_custom_attribute('req_end_date', str(application_data.end_date))
