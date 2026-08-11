@@ -7,6 +7,7 @@ from app.models.application import ApplicationType
 from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService
 from app.services.rules.evaluator import AssertionRuleEvaluator
+from app.services.game_progress_service import GameProgressService
 
 
 class ValidationError(Exception):
@@ -64,16 +65,20 @@ class ValidationService:
     def validate_dates(
         application_type: str,
         start_date: Optional[date],
-        end_date: Optional[date]
+        end_date: Optional[date],
+        virtual_today: Optional[date] = None
     ) -> None:
         """
         日付のバリデーションを行います
-        
+
         Args:
             application_type: 申請タイプ
             start_date: 開始日
             end_date: 終了日
-            
+            virtual_today: 出張申請の2週間前チェックに使う「今日」。
+                GameDayの演習用に、company_idのgame_progress.virtual_date_offset_days
+                を反映した仮想の今日を渡す。未指定の場合は実際の今日にフォールバックする。
+
         Raises:
             ValidationError: バリデーションエラー時
         """
@@ -102,7 +107,7 @@ class ValidationService:
             
             # 出張申請の2週間前チェック
             if application_type == ApplicationType.BUSINESS_TRIP.value:
-                today = date.today()
+                today = virtual_today if virtual_today is not None else date.today()
                 min_start_date = today + timedelta(days=ValidationService.BUSINESS_TRIP_MIN_ADVANCE_DAYS)
                 
                 if start_date < min_start_date:
@@ -243,7 +248,17 @@ class ValidationService:
         ValidationService.validate_required_fields(data.type, data)
 
         # 日付のバリデーション
-        ValidationService.validate_dates(data.type, data.start_date, data.end_date)
+        # 出張申請の2週間前チェックは、GameDayの演習用にcompany_idのgame_progressが
+        # 管理する仮想の今日を基準に行う（company_id/game_progressが取得できない場合は
+        # 実際の今日にフォールバックする）
+        virtual_today = None
+        if data.type == ApplicationType.BUSINESS_TRIP.value and db is not None:
+            company_id = ValidationService._resolve_company_id(user_id, token)
+            if company_id:
+                progress = GameProgressService.get_active_progress(db, company_id)
+                if progress is not None:
+                    virtual_today = date.today() + timedelta(days=progress.virtual_date_offset_days)
+        ValidationService.validate_dates(data.type, data.start_date, data.end_date, virtual_today)
 
         # その他のビジネスルールチェック
         ValidationService.validate_business_rules(data)
