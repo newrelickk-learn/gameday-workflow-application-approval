@@ -113,7 +113,7 @@ class ValidationService:
                 if start_date < min_start_date:
                     raise ValidationError(
                         error_code="INSUFFICIENT_ADVANCE_NOTICE",
-                        message=f"出張申請は開始日の{ValidationService.BUSINESS_TRIP_MIN_ADVANCE_DAYS}週間前までに申請する必要があります",
+                        message="出張申請は開始日の2週間前までに申請する必要があります",
                         field="startDate"
                     )
     
