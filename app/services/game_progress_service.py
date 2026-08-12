@@ -111,3 +111,45 @@ class GameProgressService:
             progress.virtual_date_offset_days,
         )
         return progress
+
+    @staticmethod
+    def set_offset(
+        db: Session,
+        company_id: str,
+        virtual_date_offset_days: int,
+    ) -> Optional[GameProgress]:
+        """
+        company_idに対応するvirtual_date_offset_daysを直接設定します（運営用管理操作）。
+
+        演習開始前の初期設定（例: -365で1年前からスタート）など、通常の
+        apply_approved_applicationによる自動進行では表現できない値を設定するために使う。
+        DBへの直接UPDATEを避け、company_idスコープの認可チェックを経由させるためのAPI用。
+
+        Args:
+            db: データベースセッション
+            company_id: 会社ID（チームの分離単位）
+            virtual_date_offset_days: 設定するオフセット日数
+
+        Returns:
+            更新後のGameProgress行、対象company_idの行が存在しない場合はNone
+        """
+        progress = GameProgressService.get_active_progress(db, company_id)
+        if not progress:
+            logger.warning(
+                "GameProgressService: company_id=%sのgame_progressが見つかりません（set_offset）",
+                company_id,
+            )
+            return None
+
+        progress.virtual_date_offset_days = virtual_date_offset_days
+        progress.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(progress)
+
+        logger.info(
+            "GameProgressService: virtual_date_offset_daysを直接設定しました - "
+            "company_id=%s, virtual_date_offset_days=%s",
+            company_id,
+            virtual_date_offset_days,
+        )
+        return progress
