@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
+from typing import Optional, List
 from datetime import date, datetime
 from app.models.application import ApplicationStatus
 
@@ -35,6 +35,7 @@ class Application(ApplicationBase):
     next_approver_name: Optional[str] = Field(None, alias="nextApproverName", description="次の承認者名（表示用）")
     next_approver_department: Optional[str] = Field(None, alias="nextApproverDepartment", description="次の承認者所属（表示用）")
     latest_comment: Optional[str] = Field(None, alias="latestComment", description="最新のコメント本文（表示用）")
+    receipt_image_urls: Optional[List[str]] = Field(None, alias="receiptImageUrls", description="経費精算のレシート画像URL一覧（表示用）")
     created_at: datetime = Field(..., alias="createdAt", description="作成日時")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新日時")
 

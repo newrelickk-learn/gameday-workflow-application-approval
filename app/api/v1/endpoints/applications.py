@@ -95,6 +95,9 @@ async def get_applications(
             if app.comments:
                 latest_comment = max(app.comments, key=lambda c: c.created_at)
                 app_dict["latestComment"] = latest_comment.body
+            # 経費精算のレシート画像一覧を取得（receipt_images relationshipへの初回アクセス）
+            if app.receipt_images:
+                app_dict["receiptImageUrls"] = [img.image_url for img in app.receipt_images]
             # 申請者名が設定されていない場合、UserServiceから取得
             if not app_dict.get("applicantName") and app.applicant_id:
                 applicant_info = UserService.get_user_info(app.applicant_id, token)
@@ -277,14 +280,21 @@ async def get_application(
         
         # Pydanticモデルに変換
         app_dict = Application.model_validate(application).model_dump()
-        
+
+        # 最新コメント・経費精算のレシート画像一覧を取得
+        if application.comments:
+            latest_comment = max(application.comments, key=lambda c: c.created_at)
+            app_dict["latestComment"] = latest_comment.body
+        if application.receipt_images:
+            app_dict["receiptImageUrls"] = [img.image_url for img in application.receipt_images]
+
         # 申請者名が設定されていない場合、UserServiceから取得
         if not app_dict.get("applicantName") and application.applicant_id:
             applicant_info = UserService.get_user_info(application.applicant_id, token)
             if applicant_info:
                 app_dict["applicantName"] = applicant_info.get("name")
                 app_dict["applicantDepartment"] = applicant_info.get("department")
-        
+
         return Application(**app_dict)
     except HTTPException:
         raise

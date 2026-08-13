@@ -76,6 +76,9 @@ class Application(Base):
     # 一覧取得時にアクセスすると申請ごとに個別SELECTが発行される（意図的なN+1）。
     comments = relationship("ApplicationComment", lazy="select")
 
+    # 経費精算のレシート画像（1対多）
+    receipt_images = relationship("ApplicationReceiptImage", lazy="select")
+
 
 class ApplicationComment(Base):
     """申請コメントモデル"""
@@ -87,3 +90,12 @@ class ApplicationComment(Base):
     body = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+
+class ApplicationReceiptImage(Base):
+    """経費精算のレシート画像モデル"""
+    __tablename__ = "application_receipt_images"
+
+    id = Column(String, primary_key=True, index=True)
+    application_id = Column(String, ForeignKey("applications.id"), nullable=False, index=True)
+    image_url = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
