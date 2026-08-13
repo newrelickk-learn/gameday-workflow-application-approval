@@ -4,3 +4,4 @@ metadata:
   name: gameday-workflow
   labels:
     name: gameday-workflow
+    istio-injection: enabled
