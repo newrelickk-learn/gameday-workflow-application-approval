@@ -1,4 +1,5 @@
-from sqlalchemy import Column, String, Integer, Float, Date, DateTime
+from sqlalchemy import Column, String, Integer, Float, Date, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
 import enum
@@ -70,4 +71,19 @@ class Application(Base):
     # タイムスタンプ
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # 申請コメント（1対多）。lazy="select"（デフォルト）のまま明示することで、
+    # 一覧取得時にアクセスすると申請ごとに個別SELECTが発行される（意図的なN+1）。
+    comments = relationship("ApplicationComment", lazy="select")
+
+
+class ApplicationComment(Base):
+    """申請コメントモデル"""
+    __tablename__ = "application_comments"
+
+    id = Column(String, primary_key=True, index=True)
+    application_id = Column(String, ForeignKey("applications.id"), nullable=False, index=True)
+    author_name = Column(String, nullable=True)
+    body = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

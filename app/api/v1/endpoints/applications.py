@@ -87,6 +87,11 @@ async def get_applications(
         result = []
         for app in applications:
             app_dict = Application.model_validate(app).model_dump()
+            # 各申請の最新コメントを取得（comments relationshipへの初回アクセスで
+            # 申請ごとに個別SELECTが発行される）
+            if app.comments:
+                latest_comment = max(app.comments, key=lambda c: c.created_at)
+                app_dict["latestComment"] = latest_comment.body
             # 申請者名が設定されていない場合、UserServiceから取得
             if not app_dict.get("applicantName") and app.applicant_id:
                 applicant_info = UserService.get_user_info(app.applicant_id, token)
