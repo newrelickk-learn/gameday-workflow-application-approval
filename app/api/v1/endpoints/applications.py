@@ -74,10 +74,13 @@ async def get_applications(
         if user_role:
             newrelic.agent.add_custom_attribute('user_role', user_role)
         
+        # applicantId未指定（承認者向け「申請書一覧」等の全件取得）の場合は、
+        # デフォルトのlimit(100)では自社の全申請を返しきれないため上限を上げる
         applications = ApplicationService.get_applications(
             db=db,
             status=status,
             applicant_id=applicant_id,
+            limit=100 if applicant_id else 1000,
         )
         
         # カスタム属性: 取得した申請数
