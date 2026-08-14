@@ -191,7 +191,14 @@ async def create_application(
         newrelic.agent.add_custom_attribute('application_id', application.id)
         status_value = application.status.value if hasattr(application.status, 'value') else str(application.status)
         newrelic.agent.add_custom_attribute('application_status', status_value)
-        
+        if application_data.amount:
+            newrelic.agent.add_custom_attribute('application_amount', application_data.amount)
+        if application_data.days:
+            newrelic.agent.add_custom_attribute('application_days', application_data.days)
+        newrelic.agent.add_custom_attribute('application_current_step', application.current_step)
+        newrelic.agent.add_custom_attribute('application_total_steps', application.total_steps)
+        newrelic.agent.add_custom_attribute('application_next_approver_id', application.next_approver_id)
+
         # Pydanticモデルを返す（FastAPIが自動的にaliasを使用してキャメルケースで返す）
         return Application.model_validate(application)
     except ValidationError as e:
@@ -277,7 +284,10 @@ async def get_application(
         status_value = application.status.value if hasattr(application.status, 'value') else str(application.status)
         newrelic.agent.add_custom_attribute('application_status', status_value)
         newrelic.agent.add_custom_attribute('applicant_id', application.applicant_id)
-        
+        newrelic.agent.add_custom_attribute('application_current_step', application.current_step)
+        newrelic.agent.add_custom_attribute('application_total_steps', application.total_steps)
+        newrelic.agent.add_custom_attribute('application_next_approver_id', application.next_approver_id)
+
         # Pydanticモデルに変換
         app_dict = Application.model_validate(application).model_dump()
 

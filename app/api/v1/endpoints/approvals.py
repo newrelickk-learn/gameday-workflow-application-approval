@@ -2,6 +2,7 @@ from typing import Optional
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status as http_status
 from sqlalchemy.orm import Session
+import newrelic.agent
 
 from app.api.dependencies import get_db_dependency, get_current_user_dependency
 from app.services.application_service import ApplicationService
@@ -75,6 +76,12 @@ async def update_approval(
 ) -> UpdateApprovalResponse:
     """承認を更新し、申請ステータスを更新します"""
     try:
+        # カスタム属性: 承認リクエスト情報
+        newrelic.agent.add_custom_attribute('approval_id', request.approval_id)
+        newrelic.agent.add_custom_attribute('application_id', request.application_id)
+        newrelic.agent.add_custom_attribute('approver_id', request.approver_id)
+        newrelic.agent.add_custom_attribute('approval_action', request.status)
+
         # トークンを取得（外部サービス呼び出し時に使用）
         token = current_user.get("_token")
         
@@ -140,6 +147,7 @@ async def update_approval(
                     _apply_game_progress_on_approval(db, application, token)
 
                     logger.info(f"ApprovalService: 申請を承認しました（全ステップ完了） - application_id={request.application_id}")
+                    newrelic.agent.add_custom_attribute('application_status', 'approved')
                     return UpdateApprovalResponse(
                         success=True,
                         message="承認が完了し、申請が承認されました",
@@ -172,7 +180,10 @@ async def update_approval(
                             status_code=http_status.HTTP_400_BAD_REQUEST,
                             detail={"error": "COMPANY_ID_NOT_FOUND", "message": f"申請者のCompanyIdが取得できません: applicant_id={application.applicant_id}"}
                         )
-                    
+
+                    # カスタム属性: 会社ID
+                    newrelic.agent.add_custom_attribute('company_id', company_id)
+
                     next_approver_id, next_approver_name, next_approver_department, _, _ = \
                         ApplicationService._determine_approver(
                             application.type, company_id, token, next_step,
@@ -197,12 +208,13 @@ async def update_approval(
                         _apply_game_progress_on_approval(db, application, token)
 
                         logger.info(f"ApprovalService: 申請を承認しました（全ステップ完了） - application_id={request.application_id}")
+                        newrelic.agent.add_custom_attribute('application_status', 'approved')
                         return UpdateApprovalResponse(
                             success=True,
                             message="承認が完了し、申請が承認されました",
                             application_status="approved"
                         )
-                    
+
                     # 申請のcurrent_stepとnext_approverを更新
                     application.current_step = next_step
                     application.next_approver_id = next_approver_id
@@ -214,6 +226,11 @@ async def update_approval(
                     logger.info(f"ApprovalService: 承認完了、次のステップへ - application_id={request.application_id}, "
                                f"current_step={current_step} -> next_step={next_step}, "
                                f"next_approver_id={next_approver_id}, next_approver_name={next_approver_name}")
+                    if next_step:
+                        newrelic.agent.add_custom_attribute('next_step', next_step)
+                    if next_approver_id:
+                        newrelic.agent.add_custom_attribute('next_approver_id', next_approver_id)
+                    newrelic.agent.add_custom_attribute('application_status', 'pending')
                     return UpdateApprovalResponse(
                         success=True,
                         message=f"承認が完了しました。ステップ{next_step}/{total_steps}の承認者に送られました",
@@ -229,6 +246,7 @@ async def update_approval(
                 _apply_game_progress_on_approval(db, application, token)
 
                 logger.info(f"ApprovalService: 申請を承認しました（ステップ情報なし） - application_id={request.application_id}")
+                newrelic.agent.add_custom_attribute('application_status', 'approved')
                 return UpdateApprovalResponse(
                     success=True,
                     message="承認が完了し、申請が承認されました",
@@ -240,6 +258,7 @@ async def update_approval(
                 db, request.application_id, ApplicationStatus.REJECTED
             )
             logger.info(f"ApprovalService: 申請を却下しました - application_id={request.application_id}")
+            newrelic.agent.add_custom_attribute('application_status', 'rejected')
             return UpdateApprovalResponse(
                 success=True,
                 message="申請が却下されました",
