@@ -60,6 +60,12 @@ class Application(Base):
     applicant_id = Column(String, nullable=False, index=True)
     applicant_name = Column(String, nullable=True)
     applicant_department = Column(String, nullable=True)
+
+    # 申請者の所属会社ID。承認者向け一覧（GET /applications、applicantId未指定時）を
+    # 自社分だけにDBレベルで絞り込むために使う（以前はcompany_idでのSQLフィルタが無く、
+    # 全社分をLIMIT 1000で一括取得してからPythonループで絞り込んでいたため、データ量が
+    # 増えるとN+1ループの対象行数が肥大化しPodのliveness probeタイムアウトを引き起こした）。
+    company_id = Column(Integer, nullable=True, index=True)
     
     # 承認フロー情報
     current_step = Column(Integer, nullable=True)

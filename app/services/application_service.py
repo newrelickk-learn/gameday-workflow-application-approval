@@ -227,6 +227,7 @@ class ApplicationService:
             end_date=application_data.end_date,
             days=application_data.days,
             applicant_id=application_data.applicant_id,
+            company_id=company_id,
             status=str(ApplicationStatus.PENDING.value),  # Enumの値を明示的に文字列として使用
             current_step=current_step,
             total_steps=total_steps,
@@ -286,22 +287,32 @@ class ApplicationService:
         db: Session,
         status: Optional[ApplicationStatus] = None,
         applicant_id: Optional[str] = None,
+        company_id: Optional[int] = None,
         skip: int = 0,
         limit: int = 100
     ) -> List[Application]:
-        """申請一覧を取得します"""
+        """申請一覧を取得します
+
+        company_id を指定すると、その会社の申請だけをDBレベルで絞り込む
+        （承認者向け「申請書一覧」で自社分だけを取得するために使う。
+        以前はcompany_idでのSQLフィルタが無く、全社分をLIMIT 1000で一括取得
+        してからPythonループで絞り込んでいたため、データ量増加時にPodの
+        liveness probeタイムアウトを引き起こした）。
+        """
         query = db.query(Application)
-        
+
         filters = []
         if status:
             filters.append(Application.status == status)
         if applicant_id:
             filters.append(Application.applicant_id == applicant_id)
-        
+        if company_id is not None:
+            filters.append(Application.company_id == company_id)
+
         if filters:
             query = query.filter(and_(*filters))
-        
-        return query.offset(skip).limit(limit).all()
+
+        return query.order_by(Application.created_at.desc()).offset(skip).limit(limit).all()
     
     @staticmethod
     def update_application_status(

@@ -75,11 +75,16 @@ async def get_applications(
             newrelic.agent.add_custom_attribute('user_role', user_role)
         
         # applicantId未指定（承認者向け「申請書一覧」等の全件取得）の場合は、
-        # デフォルトのlimit(100)では自社の全申請を返しきれないため上限を上げる
+        # company_idでDBレベルに絞り込む（以前はcompany_idフィルタが無く全社分を
+        # LIMIT 1000で一括取得してからPythonループで絞り込んでいたため、データ量が
+        # 増えるとN+1ループの対象行数が肥大化しPodのliveness probeタイムアウトを
+        # 引き起こした）。デフォルトのlimit(100)では自社の全申請を返しきれない
+        # ケースに備え、company_id指定時も上限は引き上げておく。
         applications = ApplicationService.get_applications(
             db=db,
             status=status,
             applicant_id=applicant_id,
+            company_id=current_company_id if not applicant_id else None,
             limit=100 if applicant_id else 1000,
         )
         
