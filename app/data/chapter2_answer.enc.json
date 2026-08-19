@@ -1,0 +1,6 @@
+{
+  "_comment": "第2章（申請書一覧のN+1）の正解テキストをAES-256-GCMで暗号化したもの。CHAPTER2_ANSWER_KEY環境変数（GitHub Secret経由でk8s Secretに注入）でのみ復号できる。復号ロジックはapp/services/chapter2_answer_service.pyを参照。",
+  "algorithm": "AES-256-GCM",
+  "nonce_base64": "9QlJpO4z34yBNSGs",
+  "ciphertext_base64": "jczstFTIz2fIwcs170n1YrjkrwWiJtgIEfh5YdZv1hBvFDZocUnsvVRUR36pkLikzX9h4DQcwtrlSBHKj0drkA4SbqEPmnwAAhxkFcgkfSWCMRZZxJxr+bx6VHqWchkS8RklTxVocu9fUe6OkGBF74bhDe9TxhYnxjQQ7y+AxywUdTRnpxzuSGmUp7wVILyNdz9bLzw7S0P8d60bYY+BM8a3iRmZkS3lEnGGsJPa2CxWm11rlJi0lfE59Ug5rb1OZnTr8erkIGhavxseHlLb/Q=="
+}

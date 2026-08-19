@@ -103,6 +103,13 @@ jobs:
             --from-literal=license-key=${{ secrets.NEW_RELIC_LICENSE_KEY }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Ensure Chapter2 answer key secret
+        run: |
+          kubectl create secret generic gameday-workflow-chapter2-secrets \
+            -n ${{ env.K8S_NAMESPACE }} \
+            --from-literal=chapter2-answer-key=${{ secrets.CHAPTER2_ANSWER_KEY }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy to Kubernetes
         run: |
           sed -i "s|image: .*|image: ${{ needs.build.outputs.image }}|" k8s/deployment.yaml

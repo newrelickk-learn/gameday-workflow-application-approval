@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # ワークフローサービス設定
     workflow_service_base_url: str = "http://workflow-notification-service:8003"
     workflow_service_use_stub: bool = False  # Trueの場合、スタブ実装を使用（開発・テスト用）
+
+    # 第2章（申請書一覧のN+1）の正解判定用の復号鍵（base64、AES-256-GCM）。
+    # GitHub Secret CHAPTER2_ANSWER_KEY からk8s Secret経由でこのコンテナにのみ注入される。
+    # 平文の正解はフロントエンドに一切送らないため、この鍵もフロントエンドには渡さない。
+    chapter2_answer_key: Optional[str] = None
     
     class Config:
         env_file = ".env"
