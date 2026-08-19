@@ -1,4 +1,5 @@
 import logging
+from typing import List
 
 from fastapi import APIRouter, Depends, status as http_status
 from pydantic import BaseModel, Field
@@ -10,6 +11,30 @@ from app.services.chapter2_answer_service import Chapter2AnswerService
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+class Chapter2OptionsResponse(BaseModel):
+    """原因診断ドロップダウンの選択肢一覧（正解は含まない）"""
+    options: List[str] = Field(..., description="診断の選択肢（毎回シャッフルされる）")
+
+
+@router.get(
+    "/chapters/2/diagnosis-options",
+    response_model=Chapter2OptionsResponse,
+    status_code=http_status.HTTP_200_OK,
+    summary="第2章（申請書一覧のN+1）の原因診断ドロップダウンの選択肢一覧",
+    description=(
+        "選択肢100件はリポジトリには暗号化された状態でのみ保存されており、"
+        "このサービスのコンテナ内でのみ復号される。どれが正解かはレスポンスに含まない。"
+    ),
+)
+async def get_chapter2_options(
+    current_user: dict = Depends(get_current_user_dependency),
+) -> Chapter2OptionsResponse:
+    """第2章の原因診断ドロップダウンの選択肢一覧を返します"""
+    newrelic.agent.set_transaction_name('/v0.1/chapters/2/diagnosis-options')
+    options = Chapter2AnswerService.get_shuffled_options()
+    return Chapter2OptionsResponse(options=options)
 
 
 class Chapter2AnswerCheckRequest(BaseModel):
