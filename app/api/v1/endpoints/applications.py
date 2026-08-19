@@ -78,14 +78,13 @@ async def get_applications(
         # company_idでDBレベルに絞り込む（以前はcompany_idフィルタが無く全社分を
         # LIMIT 1000で一括取得してからPythonループで絞り込んでいたため、データ量が
         # 増えるとN+1ループの対象行数が肥大化しPodのliveness probeタイムアウトを
-        # 引き起こした）。デフォルトのlimit(100)では自社の全申請を返しきれない
-        # ケースに備え、company_id指定時も上限は引き上げておく。
+        # 引き起こした）。件数上限は設けない（ORDER BY created_at DESCと合わせて、
+        # 以前あった「101件目以降が一覧から漏れる」問題を解消する）。
         applications = ApplicationService.get_applications(
             db=db,
             status=status,
             applicant_id=applicant_id,
             company_id=current_company_id if not applicant_id else None,
-            limit=100 if applicant_id else 1000,
         )
         
         # カスタム属性: 取得した申請数

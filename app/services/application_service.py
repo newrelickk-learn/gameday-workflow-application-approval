@@ -289,7 +289,7 @@ class ApplicationService:
         applicant_id: Optional[str] = None,
         company_id: Optional[int] = None,
         skip: int = 0,
-        limit: int = 100
+        limit: Optional[int] = None
     ) -> List[Application]:
         """申請一覧を取得します
 
@@ -298,6 +298,11 @@ class ApplicationService:
         以前はcompany_idでのSQLフィルタが無く、全社分をLIMIT 1000で一括取得
         してからPythonループで絞り込んでいたため、データ量増加時にPodの
         liveness probeタイムアウトを引き起こした）。
+
+        limitは指定しない限り上限なし（以前はapplicant_id指定時にlimit=100・
+        ORDER BYなしだったため、101件目以降の申請がPostgresの返す順序次第で
+        一覧から漏れることがあった。ORDER BY created_at DESCと合わせて、
+        件数上限そのものを撤廃する）。
         """
         query = db.query(Application)
 
@@ -312,7 +317,10 @@ class ApplicationService:
         if filters:
             query = query.filter(and_(*filters))
 
-        return query.order_by(Application.created_at.desc()).offset(skip).limit(limit).all()
+        query = query.order_by(Application.created_at.desc()).offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
+        return query.all()
     
     @staticmethod
     def update_application_status(
