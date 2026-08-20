@@ -1,7 +1,6 @@
 from typing import List, Optional
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status as http_status, Query
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import newrelic.agent
 
@@ -223,15 +222,6 @@ async def create_application(
                 "message": e.message,
                 "field": e.field,
             },
-        )
-    except AssertionError:
-        # 意図的な実装ミス: プロモーション申請のdescription検証（AssertionRuleEvaluator）が
-        # assert失敗した場合、詳細を握りつぶして200番+{error: true, message: ""}で返す。
-        # 既存の他バリデーションエラー（ValidationError=400番）はこの分岐の影響を受けない。
-        newrelic.agent.add_custom_attribute('response_actually_error', True)  # 調査の入口
-        return JSONResponse(
-            status_code=http_status.HTTP_200_OK,
-            content={"error": True, "message": ""},
         )
     except HTTPException:
         raise

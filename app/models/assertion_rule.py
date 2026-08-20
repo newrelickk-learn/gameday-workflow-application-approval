@@ -22,7 +22,7 @@ class AssertionRule(Base):
     # ルールタイプ毎のパラメータ（例: {"pattern": "..."}）
     # PostgreSQLではJSONBとして保存されるが、テスト用SQLite等でも動作するようJSONにフォールバックする
     config = Column(JSON().with_variant(JSONB, "postgresql"), nullable=False)
-    # 本来使われるべきメッセージ（意図的な実装ミスにより実際は握りつぶされて未使用）
+    # ルール違反時にValidationError.messageとして返されるメッセージ
     error_message = Column(String, nullable=True)
     # 適用順（同一 application_type/target_field 内で順に評価）
     order = Column(Integer, nullable=False, default=0)

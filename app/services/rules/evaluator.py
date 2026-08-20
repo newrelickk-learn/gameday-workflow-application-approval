@@ -37,9 +37,8 @@ class AssertionRuleEvaluator:
     """
     DBに設定されたルール（Strategy Pattern）を使って申請フィールドの値を評価する。
 
-    注意（意図的な実装ミス）: 評価結果を `raise ValidationError(...)` にせず
-    `assert result` で直接使っている。ルールに違反すると AssertionError が
-    そのまま呼び出し元（エンドポイント層）まで伝播する。
+    ルールに違反した場合、そのルールに設定された error_message を持つ
+    ValidationError(error_code="ASSERTION_RULE_VIOLATION") を raise する。
     """
 
     def evaluate(
@@ -61,7 +60,15 @@ class AssertionRuleEvaluator:
             value: 検証対象の値
             company_id: 会社ID（チームごとのルール上書きの判定に使用）
             db: データベースセッション
+
+        Raises:
+            ValidationError: いずれかのルールに違反した場合
+                (error_code="ASSERTION_RULE_VIOLATION")
         """
+        # 循環importを避けるため、ここでimportする
+        # (validation_service.py -> evaluator.py -> validation_service.py になるため)
+        from app.services.validation_service import ValidationError
+
         rules = (
             db.query(AssertionRule)
             .filter(
@@ -87,4 +94,9 @@ class AssertionRuleEvaluator:
 
             result = STRATEGY_MAP[rule.rule_type].check(value, rule.config)
             newrelic.agent.add_custom_attribute(f'{prefix}_result', result)
-            assert result  # ← 実装ミス。本来は raise ValidationError(...) すべき
+            if not result:
+                raise ValidationError(
+                    error_code="ASSERTION_RULE_VIOLATION",
+                    message=rule.error_message or "入力内容がルールに違反しています",
+                    field=target_field,
+                )

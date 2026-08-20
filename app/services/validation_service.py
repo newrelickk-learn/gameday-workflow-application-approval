@@ -239,7 +239,8 @@ class ValidationService:
 
         Raises:
             ValidationError: バリデーションエラー時
-            AssertionError: プロモーション申請のdescriptionがDB設定ルールに違反した場合
+                (プロモーション申請のdescriptionがDB設定ルールに違反した場合は
+                error_code="ASSERTION_RULE_VIOLATION")
         """
         # 申請タイプのバリデーション
         ValidationService.validate_application_type(data.type, user_id, token)
