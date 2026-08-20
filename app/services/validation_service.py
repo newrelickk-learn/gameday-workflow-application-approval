@@ -8,6 +8,11 @@ from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService
 from app.services.rules.evaluator import AssertionRuleEvaluator
 from app.services.game_progress_service import GameProgressService
+from app.services.chapter_progress_service import ChapterProgressService
+
+# プロモーション申請（第5章）を作成するには、その日のうちに第0〜4章を
+# すべてクリア済みである必要がある。
+PROMOTION_PREREQUISITE_CHAPTERS = [0, 1, 2, 3, 4]
 
 
 class ValidationError(Exception):
@@ -280,6 +285,20 @@ class ValidationService:
         # 既存のis_managerチェック（validate_application_type内）に加えて実施する。
         if data.type == ApplicationType.PROMOTION.value and db is not None:
             company_id = ValidationService._resolve_company_id(user_id, token)
+
+            # 第5章（プロモーション申請）は、当日中に第0〜4章をすべてクリア済みでなければ
+            # 申請できない（章の順序を強制するゲート）。
+            if company_id:
+                cleared_today = set(ChapterProgressService.get_cleared_chapters_today(db, company_id))
+                missing = [c for c in PROMOTION_PREREQUISITE_CHAPTERS if c not in cleared_today]
+                if missing:
+                    missing_label = "、".join(f"第{c}章" for c in missing)
+                    raise ValidationError(
+                        error_code="PREREQUISITE_CHAPTERS_NOT_CLEARED",
+                        message=f"プロモーション申請を行うには、先に第0〜4章をすべてクリアする必要があります（未クリア: {missing_label}）",
+                        field="type",
+                    )
+
             AssertionRuleEvaluator().evaluate(
                 application_type=data.type,
                 target_field="description",
