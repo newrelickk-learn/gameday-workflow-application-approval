@@ -11,6 +11,17 @@ from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService, ManagerNotFoundError
 from app.services.workflow_service import WorkflowService
 from app.services.validation_service import ValidationError
+from app.services.chapter_progress_service import ChapterProgressService
+
+# 申請タイプ別のGameDay演習の章番号。申請の作成に成功した時点で、その章の
+# クリアをchapter_progressに記録する（第1章=経費申請、第3章=出張申請、
+# 第5章=プロモーション申請）。第2章・第4章は別途、原因診断ドロップダウンの
+# 正解判定（chapter_diagnosis.py）で記録される。
+CHAPTER_BY_APPLICATION_TYPE = {
+    ApplicationType.EXPENSE.value: 1,
+    ApplicationType.BUSINESS_TRIP.value: 3,
+    ApplicationType.PROMOTION.value: 5,
+}
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +282,17 @@ class ApplicationService:
         except Exception as e:
             logger.error(f"ApplicationService: ワークフロー開始中にエラーが発生しました: {e}")
             # ワークフロー開始の失敗は申請作成を阻害しない
-        
+
+        # GameDay演習: 申請作成に成功した時点（=ここまで例外なく到達した時点）で、
+        # 対応する章のクリアを記録する。
+        chapter = CHAPTER_BY_APPLICATION_TYPE.get(application_data.type)
+        if chapter is not None:
+            try:
+                ChapterProgressService.mark_cleared(db, str(company_id), chapter)
+            except Exception as e:
+                logger.error(f"ApplicationService: chapter_progressの記録に失敗しました: {e}")
+                # 章クリアの記録失敗は申請作成を阻害しない
+
         return application
     
     @staticmethod
