@@ -3,14 +3,28 @@ from typing import List
 
 from fastapi import APIRouter, Depends, status as http_status
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 import newrelic.agent
 
-from app.api.dependencies import get_current_user_dependency
+from app.api.dependencies import get_current_user_dependency, get_db_dependency
 from app.services.chapter_diagnosis_service import ChapterDiagnosisService
+from app.services.chapter_progress_service import ChapterProgressService
+from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _resolve_company_id(current_user: dict) -> str | None:
+    """current_userのトークンからCompanyIdを解決する（game_progress.pyと同じ考え方）"""
+    token = current_user.get("_token")
+    user_id = current_user.get("user_id") or current_user.get("sub")
+    user_info = UserService.get_user_info(user_id, token)
+    if not user_info:
+        return None
+    company_id = user_info.get("CompanyId") or user_info.get("companyId")
+    return str(company_id) if company_id is not None else None
 
 
 class ChapterOptionsResponse(BaseModel):
@@ -66,6 +80,7 @@ async def get_chapter_options(
 async def check_chapter_answer(
     chapter: int,
     request: ChapterAnswerCheckRequest,
+    db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
 ) -> ChapterAnswerCheckResponse:
     """指定した章の原因診断ドロップダウンの選択が正解かどうかを判定します"""
@@ -75,4 +90,47 @@ async def check_chapter_answer(
     is_correct = ChapterDiagnosisService.check_answer(chapter, request.selected_text)
     newrelic.agent.add_custom_attribute('chapter.answer_correct', is_correct)
 
+    if is_correct:
+        company_id = _resolve_company_id(current_user)
+        if company_id:
+            newrelic.agent.add_custom_attribute('company_id', company_id)
+            ChapterProgressService.mark_cleared(db, company_id, chapter)
+        else:
+            logger.warning(
+                "check_chapter_answer: company_idが取得できないためchapter_progressを記録できません。chapter=%s",
+                chapter,
+            )
+
     return ChapterAnswerCheckResponse(correct=is_correct)
+
+
+class ChapterProgressResponse(BaseModel):
+    """今日クリア済みの章番号一覧"""
+    cleared_chapters: List[int] = Field(..., alias="clearedChapters")
+
+    class Config:
+        populate_by_name = True
+
+
+@router.get(
+    "/chapters/progress",
+    response_model=ChapterProgressResponse,
+    status_code=http_status.HTTP_200_OK,
+    summary="今日クリア済みの章番号一覧",
+    description="ログイン中ユーザーのcompany_idについて、今日のUTC日付でクリア済みの章番号一覧を返す。日付が変わるとクリア状態はリセットされる。",
+)
+async def get_chapter_progress(
+    db: Session = Depends(get_db_dependency),
+    current_user: dict = Depends(get_current_user_dependency),
+) -> ChapterProgressResponse:
+    """今日クリア済みの章番号一覧を返します"""
+    newrelic.agent.set_transaction_name('/v0.1/chapters/progress')
+
+    company_id = _resolve_company_id(current_user)
+    if not company_id:
+        return ChapterProgressResponse(cleared_chapters=[])
+
+    newrelic.agent.add_custom_attribute('company_id', company_id)
+    cleared = ChapterProgressService.get_cleared_chapters_today(db, company_id)
+    newrelic.agent.add_custom_attribute('chapter.cleared_count', len(cleared))
+    return ChapterProgressResponse(cleared_chapters=cleared)
