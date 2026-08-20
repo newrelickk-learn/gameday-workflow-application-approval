@@ -54,11 +54,11 @@ spec:
                 secretKeyRef:
                   name: gameday-workflow-application-approval-secrets
                   key: user-service-api-key
-            - name: CHAPTER2_ANSWER_KEY
+            - name: CHAPTER_DIAGNOSIS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: gameday-workflow-chapter2-secrets
-                  key: chapter2-answer-key
+                  name: gameday-workflow-chapter-diagnosis-secrets
+                  key: chapter-diagnosis-key
             - name: NEW_RELIC_LICENSE_KEY
               valueFrom:
                 secretKeyRef:

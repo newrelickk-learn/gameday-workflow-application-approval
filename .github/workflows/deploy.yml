@@ -103,11 +103,11 @@ jobs:
             --from-literal=license-key=${{ secrets.NEW_RELIC_LICENSE_KEY }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Ensure Chapter2 answer key secret
+      - name: Ensure Chapter diagnosis key secret
         run: |
-          kubectl create secret generic gameday-workflow-chapter2-secrets \
+          kubectl create secret generic gameday-workflow-chapter-diagnosis-secrets \
             -n ${{ env.K8S_NAMESPACE }} \
-            --from-literal=chapter2-answer-key=${{ secrets.CHAPTER2_ANSWER_KEY }} \
+            --from-literal=chapter-diagnosis-key=${{ secrets.CHAPTER_DIAGNOSIS_KEY }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy to Kubernetes
