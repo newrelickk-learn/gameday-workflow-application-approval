@@ -135,6 +135,64 @@ async def get_applications(
         )
 
 
+# 注意: パスパラメータを使う "/applications/{id}" より前に定義する必要がある
+# （FastAPIはルートを定義順に評価するため、後に定義すると "count" がidとして
+# マッチしてしまう）。
+@router.get(
+    "/applications/count",
+    status_code=http_status.HTTP_200_OK,
+    summary="申請件数取得",
+    description="申請の件数のみを取得します（申請者名・コメント等の付随情報は取得しないため、"
+                "一覧取得と違いN+1が発生せず高速）",
+    responses={
+        401: {"model": ErrorResponse, "description": "認証が必要です"},
+        500: {"model": ErrorResponse, "description": "サーバーエラー"},
+    },
+)
+async def get_applications_count(
+    status: Optional[ApplicationStatus] = Query(None, description="申請ステータスでフィルタリング"),
+    db: Session = Depends(get_db_dependency),
+    current_user: dict = Depends(get_current_user_dependency),
+) -> dict:
+    """申請件数のみを取得します（ダッシュボードのカード表示等、件数だけが必要な場面用）"""
+    newrelic.agent.set_transaction_name('/v0.1/applications/count')
+    try:
+        token = current_user.get("_token")
+        user_id = current_user.get("user_id") or current_user.get("sub")
+        newrelic.agent.add_custom_attribute('user_id', user_id)
+        if status:
+            newrelic.agent.add_custom_attribute(
+                'filter_status', status.value if hasattr(status, 'value') else str(status)
+            )
+
+        current_user_info = UserService.get_user_info(user_id, token)
+        if not current_user_info:
+            raise HTTPException(
+                status_code=http_status.HTTP_401_UNAUTHORIZED,
+                detail={"error": "UNAUTHORIZED", "message": "ユーザー情報を取得できませんでした"},
+            )
+        current_company_id = current_user_info.get("CompanyId") or current_user_info.get("companyId")
+        if current_company_id:
+            try:
+                current_company_id = int(current_company_id)
+            except (ValueError, TypeError):
+                current_company_id = None
+
+        count = ApplicationService.count_applications(
+            db=db, status=status, company_id=current_company_id
+        )
+        newrelic.agent.add_custom_attribute('applications_count', count)
+        return {"count": count}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_applications_count: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": "INTERNAL_SERVER_ERROR", "message": str(e)},
+        )
+
+
 @router.post(
     "/applications",
     response_model=Application,

@@ -364,7 +364,29 @@ class ApplicationService:
         if limit is not None:
             query = query.limit(limit)
         return query.all()
-    
+
+    @staticmethod
+    def count_applications(
+        db: Session,
+        status: Optional[ApplicationStatus] = None,
+        company_id: Optional[int] = None,
+    ) -> int:
+        """申請件数だけをSQLのCOUNTで取得します（get_applicationsと違い、行を取得しないため
+        申請者名・コメント等の付随情報を取得するN+1が発生しない。ダッシュボードの件数表示等、
+        件数だけが必要な場面で使う）"""
+        query = db.query(Application)
+
+        filters = []
+        if status:
+            filters.append(Application.status == status)
+        if company_id is not None:
+            filters.append(Application.company_id == company_id)
+
+        if filters:
+            query = query.filter(and_(*filters))
+
+        return query.count()
+
     @staticmethod
     def update_application_status(
         db: Session,
