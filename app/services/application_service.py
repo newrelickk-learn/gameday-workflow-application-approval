@@ -23,6 +23,15 @@ CHAPTER_BY_APPLICATION_TYPE = {
     ApplicationType.PROMOTION.value: 5,
 }
 
+# 第1章クリアの追加条件: 経費申請作成時にNew Relicの分散トレースで確認できる
+# サービス呼び出し順（frontend -> application-approval -> user）を正しく回答
+# していること。回答はフロントエンドの3つのドロップダウンで送られてくる。
+DEPENDENCY_CHAIN_ANSWER = [
+    "gameday-workflow-frontend",
+    "gameday-workflow-application-approval",
+    "gameday-workflow-user",
+]
+
 logger = logging.getLogger(__name__)
 
 
@@ -285,15 +294,19 @@ class ApplicationService:
 
         # GameDay演習: 申請作成に成功した時点（=ここまで例外なく到達した時点）で、
         # 対応する章のクリアを記録する。
-        # 第1章のみ、申請者が実際に「入社手続きの登録漏れでManagerIdがNULLだった
-        # 新人エンジニア」(IsChapter1Target)である場合に限りクリアとして記録する
-        # （上長を元から持っている他のエンジニアが経費申請しただけではクリアにしない）。
+        # 第1章は、申請者が実際に「入社手続きの登録漏れでManagerIdがNULLだった
+        # 新人エンジニア」(IsChapter1Target)であり、かつNew Relicの分散トレースで
+        # 確認できるサービス依存関係チェーンに正しく回答している場合に限りクリアと
+        # して記録する（上長を元から持っている他のエンジニアが経費申請しただけ、
+        # または依存関係チェーンに回答していない・誤っている場合はクリアにしない）。
         chapter = CHAPTER_BY_APPLICATION_TYPE.get(application_data.type)
         if chapter == 1:
             is_chapter1_target = applicant_info.get("IsChapter1Target")
             if is_chapter1_target is None:
                 is_chapter1_target = applicant_info.get("isChapter1Target")
             if not is_chapter1_target:
+                chapter = None
+            elif application_data.dependency_chain != DEPENDENCY_CHAIN_ANSWER:
                 chapter = None
         if chapter is not None:
             try:

@@ -20,7 +20,11 @@ class ApplicationBase(BaseModel):
 
 class CreateApplicationRequest(ApplicationBase):
     """申請作成リクエストスキーマ"""
-    pass
+    dependency_chain: Optional[List[str]] = Field(
+        None,
+        alias="dependencyChain",
+        description="経費申請: サービス依存関係チェーンの回答（任意。第1章クリア判定に使用）",
+    )
 
 
 class Application(ApplicationBase):
