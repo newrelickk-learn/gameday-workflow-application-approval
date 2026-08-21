@@ -285,7 +285,16 @@ class ApplicationService:
 
         # GameDay演習: 申請作成に成功した時点（=ここまで例外なく到達した時点）で、
         # 対応する章のクリアを記録する。
+        # 第1章のみ、申請者が実際に「入社手続きの登録漏れでManagerIdがNULLだった
+        # 新人エンジニア」(IsChapter1Target)である場合に限りクリアとして記録する
+        # （上長を元から持っている他のエンジニアが経費申請しただけではクリアにしない）。
         chapter = CHAPTER_BY_APPLICATION_TYPE.get(application_data.type)
+        if chapter == 1:
+            is_chapter1_target = applicant_info.get("IsChapter1Target")
+            if is_chapter1_target is None:
+                is_chapter1_target = applicant_info.get("isChapter1Target")
+            if not is_chapter1_target:
+                chapter = None
         if chapter is not None:
             try:
                 ChapterProgressService.mark_cleared(db, str(company_id), chapter)
