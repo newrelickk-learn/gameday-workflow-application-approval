@@ -6,7 +6,7 @@ metadata:
   labels:
     app: gameday-workflow-application-approval
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: gameday-workflow-application-approval

@@ -23,5 +23,5 @@ EXPOSE 8002
 
 ENTRYPOINT ["newrelic-admin", "run-program"]
 # アプリケーション起動（New Relicはmain.pyで初期化）
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "4"]
 
