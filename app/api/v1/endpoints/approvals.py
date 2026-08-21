@@ -9,12 +9,27 @@ from app.services.application_service import ApplicationService
 from app.services.workflow_service import WorkflowService
 from app.services.user_service import UserService
 from app.services.game_progress_service import GameProgressService
+from app.services.validation_service import ValidationError
 from app.models.application import ApplicationStatus
 from pydantic import BaseModel, Field
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+
+class ApproverNotFoundException(HTTPException):
+    """
+    次の承認者が見つからない場合の専用例外。
+    従来はValidationError(APPROVER_NOT_FOUND)がこのエンドポイントの汎用except節に
+    捕捉され、New Relic上では原因を特定できない汎用的なfastapi.exceptions:HTTPException
+    としてしか記録されなかったため、専用の例外クラスとして区別できるようにする。
+    """
+    def __init__(self, message: str, field: Optional[str] = None):
+        super().__init__(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail={"error": "APPROVER_NOT_FOUND", "message": message, "field": field},
+        )
 
 
 def _apply_game_progress_on_approval(db: Session, application, token: Optional[str]) -> None:
@@ -184,12 +199,18 @@ async def update_approval(
                     # カスタム属性: 会社ID
                     newrelic.agent.add_custom_attribute('company_id', company_id)
 
-                    next_approver_id, next_approver_name, next_approver_department, _, _ = \
-                        ApplicationService._determine_approver(
-                            application.type, company_id, token, next_step,
-                            applicant_id=application.applicant_id,
-                            amount=application.amount,
-                        )
+                    try:
+                        next_approver_id, next_approver_name, next_approver_department, _, _ = \
+                            ApplicationService._determine_approver(
+                                application.type, company_id, token, next_step,
+                                applicant_id=application.applicant_id,
+                                amount=application.amount,
+                            )
+                    except ValidationError as e:
+                        if e.error_code == "APPROVER_NOT_FOUND":
+                            newrelic.agent.add_custom_attribute('validation_error', e.error_code)
+                            raise ApproverNotFoundException(message=e.message, field=e.field)
+                        raise
                     
                     # 次の承認者がNoneの場合（最終ステップ）、申請を承認
                     if next_approver_id is None:
