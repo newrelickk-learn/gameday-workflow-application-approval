@@ -14,6 +14,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -22,10 +23,14 @@ from app.api.dependencies import get_db_dependency
 from app.models.application import Application  # noqa: F401 - テーブルを Base.metadata に登録
 
 # SQLite 用にテーブル作成（app の engine がすでに settings で作られているので、
-# テスト用に別 engine を使い dependency override で差し替える）
+# テスト用に別 engine を使い dependency override で差し替える）。
+# poolclass=StaticPoolが無いと、SQLiteの:memory:はスレッドごとに別DBになり
+# （TestClientがリクエストを別スレッドで処理する場合にテーブルが見えなくなる）、
+# 単一のインメモリ接続を全スレッドで共有させる。
 _test_engine = create_engine(
     "sqlite:///:memory:",
     connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
 )
 Base.metadata.create_all(bind=_test_engine)
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_test_engine)

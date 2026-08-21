@@ -6,7 +6,9 @@
 - 休暇申請: エンジニアで申請 → 201
 - プロモーション申請: 上長で申請 → 201、エンジニアで申請 → 400 PERMISSION_DENIED
 - 一覧・詳細・バリデーションエラー（2週間前、不正タイプ、申請者ID不一致）も確認
+- 申請書番号（applicationNumber）の発行フォーマット・連番・検索も確認
 """
+import re
 from datetime import date, timedelta
 
 from tests.conftest import (
@@ -266,3 +268,105 @@ def test_scenario_get_nonexistent_application_returns_404(client):
         headers=auth_headers(ENGINEER_USER_ID),
     )
     assert resp.status_code == 404
+
+
+# --- 申請書番号（applicationNumber） ---
+
+
+def test_scenario_business_trip_application_number_format(client):
+    """出張申請の申請書番号 → BT-\\d{6}形式"""
+    start, end = _future_start_end(14, 3)
+    resp = client.post(
+        "/api/v1/applications",
+        json={
+            "type": "business-trip",
+            "title": "出張申請（番号確認）",
+            "description": "テスト",
+            "startDate": start,
+            "endDate": end,
+            "days": 3,
+            "applicantId": ENGINEER_USER_ID,
+        },
+        headers=auth_headers(ENGINEER_USER_ID),
+    )
+    assert resp.status_code == 201
+    application_number = resp.json().get("applicationNumber")
+    assert re.match(r"^BT-\d{6}$", application_number or "")
+
+
+def test_scenario_expense_application_number_format(client):
+    """経費申請の申請書番号 → EX-\\d{6}形式"""
+    resp = client.post(
+        "/api/v1/applications",
+        json={
+            "type": "expense",
+            "title": "経費申請（番号確認）",
+            "description": "テスト",
+            "amount": 1000,
+            "applicantId": ENGINEER_USER_ID,
+        },
+        headers=auth_headers(ENGINEER_USER_ID),
+    )
+    assert resp.status_code == 201
+    application_number = resp.json().get("applicationNumber")
+    assert re.match(r"^EX-\d{6}$", application_number or "")
+
+
+def test_scenario_application_number_increments_per_company(client):
+    """同一会社・同一タイプで複数回作成すると申請書番号が連番で増加する"""
+    start, end = _future_start_end(14, 2)
+    payload = {
+        "type": "vacation",
+        "title": "有給休暇申請（連番確認）",
+        "description": "テスト",
+        "startDate": start,
+        "endDate": end,
+        "days": 2,
+        "applicantId": ENGINEER_USER_ID,
+    }
+    resp1 = client.post("/api/v1/applications", json=payload, headers=auth_headers(ENGINEER_USER_ID))
+    resp2 = client.post("/api/v1/applications", json=payload, headers=auth_headers(ENGINEER_USER_ID))
+    assert resp1.status_code == 201
+    assert resp2.status_code == 201
+    num1 = resp1.json()["applicationNumber"]
+    num2 = resp2.json()["applicationNumber"]
+    assert num1 != num2
+    seq1 = int(num1.split("-")[1])
+    seq2 = int(num2.split("-")[1])
+    assert seq2 == seq1 + 1
+
+
+def test_scenario_list_filter_by_application_number(client):
+    """申請一覧: applicationNumberでフィルタ → 作成した申請がヒットする"""
+    resp = client.post(
+        "/api/v1/applications",
+        json={
+            "type": "expense",
+            "title": "経費申請（番号検索確認）",
+            "description": "テスト",
+            "amount": 2000,
+            "applicantId": ENGINEER_USER_ID,
+        },
+        headers=auth_headers(ENGINEER_USER_ID),
+    )
+    assert resp.status_code == 201
+    application_number = resp.json()["applicationNumber"]
+    app_id = resp.json()["id"]
+
+    list_resp = client.get(
+        f"/api/v1/applications?applicationNumber={application_number}",
+        headers=auth_headers(ENGINEER_USER_ID),
+    )
+    assert list_resp.status_code == 200
+    results = list_resp.json()
+    assert any(item["id"] == app_id for item in results)
+
+
+def test_scenario_list_filter_by_nonexistent_application_number(client):
+    """申請一覧: 存在しないapplicationNumberでフィルタ → 空配列"""
+    resp = client.get(
+        "/api/v1/applications?applicationNumber=BT-999999",
+        headers=auth_headers(ENGINEER_USER_ID),
+    )
+    assert resp.status_code == 200
+    assert resp.json() == []

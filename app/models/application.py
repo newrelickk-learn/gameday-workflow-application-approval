@@ -66,7 +66,13 @@ class Application(Base):
     # 全社分をLIMIT 1000で一括取得してからPythonループで絞り込んでいたため、データ量が
     # 増えるとN+1ループの対象行数が肥大化しPodのliveness probeタイムアウトを引き起こした）。
     company_id = Column(Integer, nullable=True, index=True)
-    
+
+    # 申請書番号（タイプ別Prefix + 6桁ゼロ埋め連番、例: BT-000001）。
+    # 【意図的な障害シード】検索用インデックスを意図的に貼らない(index=False明示)。
+    # 新機能として追加した際にインデックスを貼り忘れ、大量データでの番号検索が
+    # company_idの絞り込み後に線形フィルタになる、というGameDayシナリオのため。
+    application_number = Column(String, nullable=True, index=False)
+
     # 承認フロー情報
     current_step = Column(Integer, nullable=True)
     total_steps = Column(Integer, nullable=True)
@@ -84,6 +90,16 @@ class Application(Base):
 
     # 経費精算のレシート画像（1対多）
     receipt_images = relationship("ApplicationReceiptImage", lazy="select")
+
+
+class ApplicationNumberCounter(Base):
+    """申請書番号の連番管理用カウンターテーブル（会社×タイプごとに1行。
+    連番は会社ごとに独立してリセットされる）"""
+    __tablename__ = "application_number_counters"
+
+    company_id = Column(Integer, primary_key=True, index=True)
+    application_type = Column(String, primary_key=True, index=True)
+    last_number = Column(Integer, nullable=False, default=0)
 
 
 class ApplicationComment(Base):

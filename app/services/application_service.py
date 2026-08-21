@@ -6,7 +6,7 @@ from datetime import datetime
 import logging
 import newrelic.agent
 
-from app.models.application import Application, ApplicationStatus, ApplicationType
+from app.models.application import Application, ApplicationStatus, ApplicationType, ApplicationNumberCounter
 from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService, ManagerNotFoundError
 from app.services.workflow_service import WorkflowService
@@ -21,6 +21,15 @@ CHAPTER_BY_APPLICATION_TYPE = {
     ApplicationType.EXPENSE.value: 1,
     ApplicationType.BUSINESS_TRIP.value: 3,
     ApplicationType.PROMOTION.value: 5,
+}
+
+# 申請書番号のタイプ別Prefix。カウンターテーブル(application_number_counters)の
+# application_typeキーおよびApplication.typeの値と1:1で対応させる。
+APPLICATION_NUMBER_PREFIX_BY_TYPE = {
+    ApplicationType.BUSINESS_TRIP.value: "BT",
+    ApplicationType.EXPENSE.value: "EX",
+    ApplicationType.VACATION.value: "VC",
+    ApplicationType.PROMOTION.value: "PR",
 }
 
 # 第1章クリアの追加条件: 経費申請作成時にNew Relicの分散トレースで確認できる
@@ -182,6 +191,43 @@ class ApplicationService:
         return approver_id, approver_name, approver_department, step, total_steps
     
     @staticmethod
+    def _issue_application_number(db: Session, company_id: int, application_type: str) -> str:
+        """
+        application_number_counters（会社×タイプごとに1行）をSELECT ... FOR UPDATEで
+        ロックしてインクリメントし、「Prefix + 6桁ゼロ埋め連番」形式の申請書番号を発行します。
+        連番は会社ごとに独立してリセットされる（他社の件数とは無関係に1から始まる）。
+
+        create_applicationと同一のdbセッション・同一トランザクション内で呼び出すこと
+        （このメソッド内ではcommitしない。呼び出し元のdb.commit()で、申請本体のINSERTと
+        カウンター更新が一括してコミット/ロールバックされるようにする）。
+        """
+        prefix = APPLICATION_NUMBER_PREFIX_BY_TYPE.get(application_type)
+        if not prefix:
+            logger.error(f"ApplicationService: 未知の申請タイプのため申請書番号を発行できません。application_type={application_type}")
+            raise ValueError(f"申請書番号を発行できない申請タイプです: {application_type}")
+
+        counter = (
+            db.query(ApplicationNumberCounter)
+            .filter(
+                ApplicationNumberCounter.company_id == company_id,
+                ApplicationNumberCounter.application_type == application_type,
+            )
+            .with_for_update()
+            .first()
+        )
+        if counter is None:
+            # 想定外だが、カウンター行が無い場合は0スタートで新規作成する
+            # （テスト用SQLite DB等、初期化SQLでのINSERTが反映されていない環境向け）
+            counter = ApplicationNumberCounter(company_id=company_id, application_type=application_type, last_number=0)
+            db.add(counter)
+            db.flush()
+
+        counter.last_number += 1
+        next_number = counter.last_number
+
+        return f"{prefix}-{next_number:06d}"
+
+    @staticmethod
     def create_application(
         db: Session,
         application_data: CreateApplicationRequest,
@@ -236,7 +282,11 @@ class ApplicationService:
         
         # 一時的なtotal_steps（後で更新される）
         total_steps = 1
-        
+
+        # 申請書番号を発行（会社×タイプごとに連番、company_idスコープの検索APIで使う。
+        # 検索用インデックスは意図的に貼っていないため、大量データではフィルタが線形になる）
+        application_number = ApplicationService._issue_application_number(db, company_id, application_data.type)
+
         application = Application(
             id=str(uuid4()),
             type=application_data.type,
@@ -248,6 +298,7 @@ class ApplicationService:
             days=application_data.days,
             applicant_id=application_data.applicant_id,
             company_id=company_id,
+            application_number=application_number,
             status=str(ApplicationStatus.PENDING.value),  # Enumの値を明示的に文字列として使用
             current_step=current_step,
             total_steps=total_steps,
@@ -330,6 +381,7 @@ class ApplicationService:
         db: Session,
         status: Optional[ApplicationStatus] = None,
         applicant_id: Optional[str] = None,
+        application_number: Optional[str] = None,
         company_id: Optional[int] = None,
         skip: int = 0,
         limit: Optional[int] = None
@@ -341,6 +393,12 @@ class ApplicationService:
         以前はcompany_idでのSQLフィルタが無く、全社分をLIMIT 1000で一括取得
         してからPythonループで絞り込んでいたため、データ量増加時にPodの
         liveness probeタイムアウトを引き起こした）。
+
+        application_number を指定すると申請書番号で絞り込む。company_idフィルタと
+        併用されるため対象行数自体は絞られるが、application_number列には検索用
+        インデックスを意図的に貼っていないため、company_idで絞り込んだ後の行に対する
+        一致判定は各社のデータ量に比例した線形フィルタになる（GameDay演習用の
+        意図的な性能問題）。
 
         limitは指定しない限り上限なし（以前はapplicant_id指定時にlimit=100・
         ORDER BYなしだったため、101件目以降の申請がPostgresの返す順序次第で
@@ -354,6 +412,8 @@ class ApplicationService:
             filters.append(Application.status == status)
         if applicant_id:
             filters.append(Application.applicant_id == applicant_id)
+        if application_number:
+            filters.append(Application.application_number == application_number)
         if company_id is not None:
             filters.append(Application.company_id == company_id)
 

@@ -30,6 +30,7 @@ router = APIRouter()
 async def get_applications(
     status: Optional[ApplicationStatus] = Query(None, description="申請ステータスでフィルタリング"),
     applicant_id: Optional[str] = Query(None, description="申請者IDでフィルタリング", alias="applicantId"),
+    application_number: Optional[str] = Query(None, description="申請書番号でフィルタリング", alias="applicationNumber"),
     db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
 ) -> List[Application]:
@@ -48,7 +49,9 @@ async def get_applications(
             newrelic.agent.add_custom_attribute('filter_status', status_value)
         if applicant_id:
             newrelic.agent.add_custom_attribute('filter_applicant_id', applicant_id)
-        
+        if application_number:
+            newrelic.agent.add_custom_attribute('filter_application_number', application_number)
+
         # ログインユーザーの会社IDを取得
         current_user_info = UserService.get_user_info(user_id, token)
         if not current_user_info:
@@ -83,6 +86,7 @@ async def get_applications(
             db=db,
             status=status,
             applicant_id=applicant_id,
+            application_number=application_number,
             company_id=current_company_id if not applicant_id else None,
         )
         

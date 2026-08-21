@@ -30,6 +30,7 @@ class CreateApplicationRequest(ApplicationBase):
 class Application(ApplicationBase):
     """申請レスポンススキーマ"""
     id: str = Field(..., description="申請ID")
+    application_number: Optional[str] = Field(None, alias="applicationNumber", description="申請書番号（例: BT-000001）")
     status: ApplicationStatus = Field(..., description="申請ステータス")
     applicant_name: Optional[str] = Field(None, alias="applicantName", description="申請者名（表示用）")
     applicant_department: Optional[str] = Field(None, alias="applicantDepartment", description="申請者所属（表示用）")
