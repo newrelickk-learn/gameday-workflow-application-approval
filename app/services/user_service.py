@@ -1,6 +1,5 @@
-from typing import Optional
+from typing import Dict, Iterable, Optional
 import logging
-import newrelic.agent
 
 # httpxは外部サービス呼び出し時に使用（現在はスタブ実装）
 try:
@@ -119,6 +118,94 @@ class UserService:
             pass
         logger.error(f"UserService: 外部サービスからユーザー情報を取得できませんでした。user_id={user_id}")
         return None
+
+    @staticmethod
+    def get_users_info(user_ids: Iterable[str], token: Optional[str] = None) -> Dict[str, dict]:
+        """
+        複数ユーザーの情報を一括取得します（User Service の GET /users/batch を1回だけ呼び出す）。
+        承認者向け申請一覧のように、申請件数分get_user_infoをループ呼び出しするとN+1になる
+        箇所で使用する。
+
+        Args:
+            user_ids: 取得したいユーザーIDのコレクション（重複していてもよい。内部で重複除去する）
+            token: 認証トークン（オプション）
+
+        Returns:
+            {user_id(str): user_info_dict} の辞書。見つからなかった・取得できなかったuser_idは
+            キーに含まれない（呼び出し元でNone/欠損として扱う想定）。例外は投げない。
+        """
+        ids = sorted({str(uid).strip() for uid in user_ids if uid is not None and str(uid).strip()})
+        if not ids:
+            return {}
+
+        # スタブ実装を使用する設定の場合
+        if settings.user_service_use_stub:
+            logger.info(f"UserService: get_users_info スタブ実装を使用（設定による）。ids={ids}")
+            return {uid: UserService._get_stub_user_info(uid) for uid in ids}
+
+        if not HTTPX_AVAILABLE:
+            logger.warning("httpxが利用できないため、get_users_infoはフォールバックのみ使用します")
+            return UserService._get_users_info_fallback(ids)
+
+        result: Dict[str, dict] = {}
+        url = f"{settings.user_service_base_url}/users/batch"
+        try:
+            headers = {
+                "X-API-Key": settings.user_service_api_key
+            }
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+            params = [("ids", uid) for uid in ids]
+
+            logger.info(f"UserService: バッチ取得APIを呼び出し中: {url}, ids_count={len(ids)}")
+            response = httpx.get(url, headers=headers, params=params, timeout=10.0)
+            response.raise_for_status()
+            users = response.json()
+            for user_info in users:
+                uid = user_info.get("id")
+                if uid is None:
+                    uid = user_info.get("Id")
+                if uid is not None:
+                    result[str(uid)] = user_info
+            logger.info(
+                f"UserService: バッチ取得成功: requested={len(ids)}, found={len(result)}"
+            )
+        except httpx.ConnectError as e:
+            logger.error(
+                f"UserService: バッチ取得の接続エラー - url={url}, error={e}"
+            )
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"UserService: バッチ取得エラー: status={e.response.status_code}, url={url}"
+            )
+        except Exception as e:
+            logger.error(f"UserService: バッチ取得に失敗しました: {e}")
+
+        missing = [uid for uid in ids if uid not in result]
+        if missing:
+            result.update(UserService._get_users_info_fallback(missing))
+
+        return result
+
+    @staticmethod
+    def _get_users_info_fallback(user_ids: Iterable[str]) -> Dict[str, dict]:
+        """
+        外部サービスから取得できなかった・欠損したuser_idのうち、既知のユーザーID範囲
+        （上長21051-21100等）のものだけスタブでフォールバックします。
+        get_user_infoが単一ID取得時に行う既知ID範囲フォールバックと同じ範囲・方針です。
+        """
+        result: Dict[str, dict] = {}
+        for user_id in user_ids:
+            try:
+                uid = int(user_id)
+            except (ValueError, TypeError):
+                continue
+            if (1051 <= uid <= 1100) or (16051 <= uid <= 16100) or (21051 <= uid <= 21100) or (28151 <= uid <= 28200):
+                logger.warning(
+                    f"UserService: バッチ取得失敗のため、既知ID用スタブでフォールバック。user_id={user_id}"
+                )
+                result[str(user_id)] = UserService._get_stub_user_info(str(user_id))
+        return result
 
     @staticmethod
     def get_manager(user_id: str, token: Optional[str] = None) -> Optional[dict]:

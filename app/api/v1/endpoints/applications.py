@@ -94,6 +94,12 @@ async def get_applications(
         newrelic.agent.add_custom_attribute('applications_count', len(applications))
         
         # 各申請の申請者名を取得し、同じ会社の申請のみフィルタリング
+        # 申請者IDをまとめて重複除去し、UserServiceへは1回のバッチ呼び出しのみ行う
+        # （以前は申請1件ごとにget_user_infoを呼んでおり、申請件数分のN+1が発生していた）
+        unique_applicant_ids = {app.applicant_id for app in applications if app.applicant_id}
+        applicant_info_map = UserService.get_users_info(unique_applicant_ids, token)
+        newrelic.agent.add_custom_attribute('unique_applicant_count', len(unique_applicant_ids))
+
         result = []
         for app in applications:
             app_dict = Application.model_validate(app).model_dump()
@@ -105,9 +111,11 @@ async def get_applications(
             # 経費精算のレシート画像一覧を取得（receipt_images relationshipへの初回アクセス）
             if app.receipt_images:
                 app_dict["receiptImageUrls"] = [img.image_url for img in app.receipt_images]
+
+            applicant_info = applicant_info_map.get(str(app.applicant_id)) if app.applicant_id else None
+
             # 申請者名が設定されていない場合、UserServiceから取得
             if not app_dict.get("applicantName") and app.applicant_id:
-                applicant_info = UserService.get_user_info(app.applicant_id, token)
                 if applicant_info:
                     # 同じ会社の申請のみ追加
                     applicant_company_id = applicant_info.get("CompanyId") or applicant_info.get("companyId")
@@ -123,11 +131,10 @@ async def get_applications(
                         )
             else:
                 # 申請者名が既に設定されている場合も会社チェックが必要
-                applicant_info = UserService.get_user_info(app.applicant_id, token)
                 applicant_company_id = applicant_info.get("CompanyId") or applicant_info.get("companyId") if applicant_info else None
                 if applicant_info and applicant_company_id == current_company_id:
                     result.append(Application(**app_dict))
-        
+
         return result
     except HTTPException:
         raise

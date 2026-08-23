@@ -10,7 +10,9 @@
 """
 import re
 from datetime import date, timedelta
+from unittest.mock import patch
 
+from app.services.user_service import UserService
 from tests.conftest import (
     ENGINEER_USER_ID,
     MANAGER_USER_ID,
@@ -259,6 +261,40 @@ def test_scenario_list_filter_by_applicant_id(client):
     )
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
+
+
+def test_scenario_list_calls_user_service_batch_once_regardless_of_application_count(client):
+    """申請一覧: 同一申請者による複数件の申請があっても、申請者情報のバッチ取得は1回だけ呼ばれる
+    （N+1解消の回帰テスト。以前は申請件数分UserService.get_user_infoがループ呼び出しされていた）"""
+    start, end = _future_start_end(14, 2)
+    for _ in range(3):
+        resp = client.post(
+            "/api/v1/applications",
+            json={
+                "type": "business-trip",
+                "title": "N+1回帰テスト用申請",
+                "description": "テスト",
+                "startDate": start,
+                "endDate": end,
+                "days": 2,
+                "applicantId": ENGINEER_USER_ID,
+            },
+            headers=auth_headers(ENGINEER_USER_ID),
+        )
+        assert resp.status_code == 201
+
+    with patch.object(
+        UserService, "get_users_info", wraps=UserService.get_users_info
+    ) as mock_get_users_info:
+        list_resp = client.get(
+            "/api/v1/applications",
+            headers=auth_headers(ENGINEER_USER_ID),
+        )
+
+    assert list_resp.status_code == 200
+    assert len(list_resp.json()) >= 3
+    # 申請件数（3件以上）に関わらず、申請者情報のバッチ取得は1回だけ
+    assert mock_get_users_info.call_count == 1
 
 
 def test_scenario_get_nonexistent_application_returns_404(client):

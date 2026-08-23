@@ -1,6 +1,5 @@
 from typing import Optional
-from datetime import date, datetime, timedelta
-from fastapi import HTTPException, status as http_status
+from datetime import date, timedelta
 from sqlalchemy.orm import Session
 
 from app.models.application import ApplicationType
