@@ -382,6 +382,7 @@ class ApplicationService:
         status: Optional[ApplicationStatus] = None,
         applicant_id: Optional[str] = None,
         application_number: Optional[str] = None,
+        next_approver_id: Optional[str] = None,
         company_id: Optional[int] = None,
         skip: int = 0,
         limit: Optional[int] = None
@@ -414,6 +415,8 @@ class ApplicationService:
             filters.append(Application.applicant_id == applicant_id)
         if application_number:
             filters.append(Application.application_number == application_number)
+        if next_approver_id:
+            filters.append(Application.next_approver_id == next_approver_id)
         if company_id is not None:
             filters.append(Application.company_id == company_id)
 
