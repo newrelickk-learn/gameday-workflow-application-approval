@@ -9,6 +9,7 @@ import newrelic.agent
 from app.api.dependencies import get_current_user_dependency, get_db_dependency
 from app.services.chapter_diagnosis_service import ChapterDiagnosisService
 from app.services.chapter_progress_service import ChapterProgressService
+from app.services.nplus1_quiz_service import NPlusOneQuizService
 from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,90 @@ async def check_chapter_answer(
             )
 
     return ChapterAnswerCheckResponse(correct=is_correct)
+
+
+class NPlusOneQuizOptionsResponse(BaseModel):
+    """第2章N+1診断クイズ（3問構成）の選択肢一覧（正解は含まない）"""
+    q1: List[str] = Field(..., description="パフォーマンス問題の種類の選択肢（毎回シャッフルされる）")
+    q2: List[str] = Field(..., description="問題が発生しているテーブルの選択肢（毎回シャッフルされる）")
+    q3: List[str] = Field(..., description="改善方法の選択肢（毎回シャッフルされる）")
+
+
+class NPlusOneQuizAnswersRequest(BaseModel):
+    """第2章N+1診断クイズ（3問構成）で選ばれた選択肢のテキスト"""
+    q1: List[str] = Field(..., description="パフォーマンス問題の種類として選んだ内容")
+    q2: List[str] = Field(..., description="問題が発生しているテーブルとして選んだ内容（複数選択）")
+    q3: List[str] = Field(..., description="改善方法として選んだ内容")
+
+
+class NPlusOneQuizResultResponse(BaseModel):
+    """第2章N+1診断クイズ（3問構成）の判定結果（正解テキスト自体は含まない）"""
+    q1: bool = Field(..., description="Q1（パフォーマンス問題の種類）が正解と一致したか")
+    q2: bool = Field(..., description="Q2（問題が発生しているテーブル）が正解と一致したか")
+    q3: bool = Field(..., description="Q3（改善方法）が正解と一致したか")
+    all_correct: bool = Field(..., alias="allCorrect", description="3問すべてが正解と一致したか")
+
+    class Config:
+        populate_by_name = True
+
+
+@router.get(
+    "/chapters/2/nplus1-quiz/options",
+    response_model=NPlusOneQuizOptionsResponse,
+    status_code=http_status.HTTP_200_OK,
+    summary="第2章N+1診断クイズ（3問構成）の選択肢一覧",
+    description=(
+        "選択肢はリポジトリには暗号化された状態でのみ保存されており、"
+        "このサービスのコンテナ内でのみ復号される。どれが正解かはレスポンスに含まない。"
+    ),
+)
+async def get_nplus1_quiz_options(
+    current_user: dict = Depends(get_current_user_dependency),
+) -> NPlusOneQuizOptionsResponse:
+    """第2章N+1診断クイズ（3問構成）の選択肢一覧を返します"""
+    newrelic.agent.set_transaction_name('/v0.1/chapters/2/nplus1-quiz/options')
+    options = NPlusOneQuizService.get_shuffled_options()
+    return NPlusOneQuizOptionsResponse(**options)
+
+
+@router.post(
+    "/chapters/2/nplus1-quiz/check-answers",
+    response_model=NPlusOneQuizResultResponse,
+    status_code=http_status.HTTP_200_OK,
+    summary="第2章N+1診断クイズ（3問構成）の判定",
+    description=(
+        "3問すべての回答をまとめて判定する。3問すべてが正解の場合のみ"
+        "chapter_progressにクリアを記録する（一部の問だけ正解の場合は記録しない）。"
+    ),
+)
+async def check_nplus1_quiz_answers(
+    request: NPlusOneQuizAnswersRequest,
+    db: Session = Depends(get_db_dependency),
+    current_user: dict = Depends(get_current_user_dependency),
+) -> NPlusOneQuizResultResponse:
+    """第2章N+1診断クイズ（3問構成）の回答をまとめて判定します"""
+    newrelic.agent.set_transaction_name('/v0.1/chapters/2/nplus1-quiz/check-answers')
+
+    results = NPlusOneQuizService.check_answers(request.q1, request.q2, request.q3)
+    all_correct = all(results.values())
+    newrelic.agent.add_custom_attribute('chapter.answer_correct', all_correct)
+
+    if all_correct:
+        company_id = _resolve_company_id(current_user)
+        if company_id:
+            newrelic.agent.add_custom_attribute('company_id', company_id)
+            ChapterProgressService.mark_cleared(db, company_id, 2)
+        else:
+            logger.warning(
+                "check_nplus1_quiz_answers: company_idが取得できないためchapter_progressを記録できません。"
+            )
+
+    return NPlusOneQuizResultResponse(
+        q1=results["q1"],
+        q2=results["q2"],
+        q3=results["q3"],
+        allCorrect=all_correct,
+    )
 
 
 class ChapterProgressResponse(BaseModel):
