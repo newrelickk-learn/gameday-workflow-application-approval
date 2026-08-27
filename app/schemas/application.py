@@ -5,7 +5,6 @@ from app.models.application import ApplicationStatus
 
 
 class ApplicationBase(BaseModel):
-    """申請の基本スキーマ"""
     type: str = Field(..., description="申請タイプ（business-trip, expense, vacation, promotion等）")
     title: str = Field(..., description="申請タイトル")
     description: str = Field(..., description="申請内容の説明")
@@ -19,16 +18,24 @@ class ApplicationBase(BaseModel):
 
 
 class CreateApplicationRequest(ApplicationBase):
-    """申請作成リクエストスキーマ"""
     dependency_chain: Optional[List[str]] = Field(
         None,
         alias="dependencyChain",
-        description="経費申請: サービス依存関係チェーンの回答（任意。第1章クリア判定に使用）",
+        description="経費申請: サービス依存関係チェーンの回答（任意）",
+    )
+    departure_city_name: Optional[str] = Field(
+        None,
+        alias="departureCityName",
+        description="出張申請: 出発地の都市名（任意。都市IDはtravelサービス側のSERIAL連番でブレるため名前で判定する）",
+    )
+    arrival_city_name: Optional[str] = Field(
+        None,
+        alias="arrivalCityName",
+        description="出張申請: 到着地の都市名（任意）",
     )
 
 
 class Application(ApplicationBase):
-    """申請レスポンススキーマ"""
     id: str = Field(..., description="申請ID")
     application_number: Optional[str] = Field(None, alias="applicationNumber", description="申請書番号（例: BT-000001）")
     status: ApplicationStatus = Field(..., description="申請ステータス")
@@ -55,13 +62,11 @@ class Application(ApplicationBase):
 
 
 class ErrorResponse(BaseModel):
-    """エラーレスポンススキーマ"""
     error: str = Field(..., description="エラーコード")
     message: Optional[str] = Field(None, description="エラーメッセージ")
 
 
 class ValidationErrorResponse(BaseModel):
-    """バリデーションエラーレスポンススキーマ"""
     error: str = Field(..., description="エラーコード")
     message: str = Field(..., description="エラーメッセージ")
     field: Optional[str] = Field(None, description="エラーが発生したフィールド名")

@@ -15,12 +15,6 @@ router = APIRouter()
 
 
 class UpdateGameProgressRequest(BaseModel):
-    """
-    game_progress管理用更新リクエストスキーマ
-
-    単一の共有環境を複数チームが同時に触るため、DBを直接UPDATEするのではなく、
-    このAPI経由でトークンのcompany_idに対応する行のみを更新できるようにする。
-    """
     virtual_date_offset_days: int = Field(..., alias="virtualDateOffsetDays", description="実際の今日からのオフセット日数")
 
     class Config:
@@ -28,7 +22,6 @@ class UpdateGameProgressRequest(BaseModel):
 
 
 class GameProgressResponse(BaseModel):
-    """game_progress管理APIレスポンススキーマ"""
     virtual_date_offset_days: int = Field(..., alias="virtualDateOffsetDays")
 
     class Config:
@@ -36,16 +29,11 @@ class GameProgressResponse(BaseModel):
 
 
 def _resolve_company_id(current_user: dict) -> Optional[str]:
-    """
-    認証トークンからCompanyIdを解決します
-    （game_progressの更新可否の認可チェックに使用）
-    """
     token = current_user.get("_token")
     user_id = current_user.get("user_id") or current_user.get("sub")
     user_info = UserService.get_user_info(user_id, token)
     if not user_info:
         return None
-    # PascalCase (CompanyId) と camelCase (companyId) の両方に対応
     company_id = user_info.get("CompanyId") or user_info.get("companyId")
     if company_id is None:
         return None
@@ -73,7 +61,6 @@ async def update_game_progress(
     db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
 ) -> GameProgressResponse:
-    """ログイン中ユーザーのcompany_idに対応するgame_progressを直接設定します"""
     company_id = _resolve_company_id(current_user)
     if company_id is None:
         raise HTTPException(

@@ -15,11 +15,6 @@ router = APIRouter()
 
 
 def verify_internal_api_key(x_api_key: str = Header(..., alias="X-API-Key")) -> None:
-    """
-    サービス間通信用のAPI Key検証（ユーザーのJWTを持たない他サービスからの
-    呼び出し用）。gameday-workflow-user側がPythonサービスを呼ぶ際に使う既存の
-    USER_SERVICE_API_KEYと同じ値を共有鍵として使う（新しいSecretは増やさない）。
-    """
     if not settings.user_service_api_key or x_api_key != settings.user_service_api_key:
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED,
@@ -28,7 +23,6 @@ def verify_internal_api_key(x_api_key: str = Header(..., alias="X-API-Key")) -> 
 
 
 class MarkChapterClearedRequest(BaseModel):
-    """章クリア記録リクエスト（サービス間通信用、company_idを直接指定する）"""
     company_id: str = Field(..., alias="companyId")
 
     class Config:

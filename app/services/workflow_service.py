@@ -1,7 +1,6 @@
 from typing import Optional
 import logging
 
-# httpxは外部サービス呼び出し時に使用
 try:
     import httpx
     HTTPX_AVAILABLE = True
@@ -14,19 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 class WorkflowService:
-    """ワークフローサービス"""
     
     @staticmethod
     def _map_application_type_to_workflow_type(application_type: str) -> str:
-        """
-        申請タイプをワークフロー定義名にマッピングします
-        
-        Args:
-            application_type: 申請タイプ（business-trip, expense, promotion等）
-            
-        Returns:
-            ワークフロー定義名（BusinessTrip, Expense, Promotion等）
-        """
         mapping = {
             "business-trip": "BusinessTrip",
             "expense": "Expense",
@@ -43,19 +32,6 @@ class WorkflowService:
         token: Optional[str] = None,
         amount: Optional[float] = None,
     ) -> Optional[dict]:
-        """
-        外部サービスAPIからワークフローを開始します
-
-        Args:
-            application_id: 申請ID
-            application_type: 申請タイプ
-            token: 認証トークン（オプション）
-            amount: 申請金額（オプション）。workflow-notification側で経費申請を
-                Expense/ExpenseSettlement（2段階承認）に振り分ける判定に使用される。
-
-        Returns:
-            ワークフロー開始レスポンスの辞書、取得失敗時はNone
-        """
         if not HTTPX_AVAILABLE:
             logger.warning("httpxが利用できないため、ワークフロー開始をスキップします")
             return None
@@ -104,55 +80,25 @@ class WorkflowService:
         token: Optional[str] = None,
         amount: Optional[float] = None,
     ) -> Optional[dict]:
-        """
-        ワークフローを開始します
-        申請作成時に呼び出され、承認レコードを作成します
-
-        Args:
-            application_id: 申請ID
-            application_type: 申請タイプ
-            token: 認証トークン（オプション、外部サービス呼び出し時に使用）
-            amount: 申請金額（オプション）。経費申請(expense)の場合、workflow-notification側で
-                Expense（通常/1段階）とExpenseSettlement（高額/2段階承認）を振り分けるために使用される。
-
-        Returns:
-            ワークフロー開始レスポンスの辞書、取得失敗時はNone
-        """
-        # スタブ実装を使用する設定の場合
         if settings.workflow_service_use_stub:
             logger.info(f"WorkflowService: スタブ実装を使用（設定による）。application_id={application_id}")
             return WorkflowService._start_workflow_stub(application_id, application_type)
 
-        # 外部サービスから取得を試みる
         result = WorkflowService._start_workflow_via_api(application_id, application_type, company_id, token, amount)
 
         if result:
             return result
         
-        # 外部サービスが利用できない場合
-        # スタブ実装が有効な場合のみフォールバック
         if settings.workflow_service_use_stub:
             logger.warning(f"WorkflowService: 外部サービスが利用できないため、スタブ実装を使用中。application_id={application_id}")
             return WorkflowService._start_workflow_stub(application_id, application_type)
         
-        # スタブ実装が無効な場合、エラーをログに記録してNoneを返す
         logger.error(f"WorkflowService: 外部サービスからワークフローを開始できませんでした。application_id={application_id}")
         return None
     
     @staticmethod
     def _start_workflow_stub(application_id: str, application_type: str) -> dict:
-        """
-        スタブ実装: ワークフロー開始レスポンスを返します
-        
-        Args:
-            application_id: 申請ID
-            application_type: 申請タイプ
-            
-        Returns:
-            ワークフロー開始レスポンスの辞書
-        """
         from uuid import uuid4
-        # 申請タイプに応じてtotal_stepsを設定
         total_steps_map = {
             "business-trip": 3,
             "expense": 3,
@@ -170,16 +116,6 @@ class WorkflowService:
     
     @staticmethod
     def _get_workflow_definition_stub(application_type: str) -> dict:
-        """
-        スタブ実装: ワークフロー定義を返します
-        
-        Args:
-            application_type: 申請タイプ
-            
-        Returns:
-            ワークフロー定義の辞書
-        """
-        # 申請タイプに応じてステップを設定
         steps_map = {
             "business-trip": [
                 {"stepNumber": 1, "approverRole": "エンジニア", "isRequired": True},
@@ -213,29 +149,12 @@ class WorkflowService:
         token: Optional[str] = None,
         amount: Optional[float] = None,
     ) -> Optional[dict]:
-        """
-        ワークフロー定義を取得します
-
-        Args:
-            application_type: 申請タイプ
-            company_id: 会社ID（オプション）
-            token: 認証トークン（オプション）
-            amount: 申請金額（オプション）。経費申請(expense)の場合、workflow-notification側で
-                Expense（通常/2ステップ）とExpenseSettlement（高額/3ステップ・2段階承認）を
-                振り分けるために使用される。start_workflow時だけでなく、承認ステップの遷移時
-                （次の承認者を決定する際）にも同じ振り分け結果を得るために必要。
-
-        Returns:
-            ワークフロー定義の辞書、取得失敗時はNone
-        """
-        # スタブ実装を使用する設定の場合
         if settings.workflow_service_use_stub:
             logger.info(f"WorkflowService: スタブ実装を使用（設定による）。application_type={application_type}")
             return WorkflowService._get_workflow_definition_stub(application_type)
         
         if not HTTPX_AVAILABLE:
             logger.warning("httpxが利用できないため、ワークフロー定義取得をスキップします")
-            # スタブ実装が有効な場合のみフォールバック
             if settings.workflow_service_use_stub:
                 return WorkflowService._get_workflow_definition_stub(application_type)
             return None
@@ -267,7 +186,6 @@ class WorkflowService:
             return result
         except httpx.ConnectError as e:
             logger.error(f"WorkflowService: 接続エラー - url={url}, error={e}")
-            # スタブ実装が有効な場合のみフォールバック
             if settings.workflow_service_use_stub:
                 logger.warning(f"WorkflowService: 外部サービスが利用できないため、スタブ実装を使用中。application_type={application_type}")
                 return WorkflowService._get_workflow_definition_stub(application_type)
@@ -275,14 +193,12 @@ class WorkflowService:
         except httpx.HTTPStatusError as e:
             logger.error(f"WorkflowService: HTTPエラー: status={e.response.status_code}, "
                         f"application_type={application_type}, url={url}, error={e}")
-            # スタブ実装が有効な場合のみフォールバック
             if settings.workflow_service_use_stub:
                 logger.warning(f"WorkflowService: 外部サービスが利用できないため、スタブ実装を使用中。application_type={application_type}")
                 return WorkflowService._get_workflow_definition_stub(application_type)
             return None
         except Exception as e:
             logger.error(f"WorkflowService: ワークフロー定義取得に失敗しました: {e}")
-            # スタブ実装が有効な場合のみフォールバック
             if settings.workflow_service_use_stub:
                 logger.warning(f"WorkflowService: 外部サービスが利用できないため、スタブ実装を使用中。application_type={application_type}")
                 return WorkflowService._get_workflow_definition_stub(application_type)
@@ -296,19 +212,6 @@ class WorkflowService:
         status: str,
         token: Optional[str] = None
     ) -> Optional[dict]:
-        """
-        外部サービスAPIでワークフローを承認します
-        
-        Args:
-            approval_id: 承認ID
-            application_id: 申請ID
-            approver_id: 承認者ID
-            status: 承認ステータス（approved/rejected）
-            token: 認証トークン（オプション）
-            
-        Returns:
-            ワークフロー承認レスポンスの辞書、取得失敗時はNone
-        """
         if not HTTPX_AVAILABLE:
             logger.warning("httpxが利用できないため、ワークフロー承認をスキップします")
             return None
@@ -356,55 +259,24 @@ class WorkflowService:
         status: str,
         token: Optional[str] = None
     ) -> Optional[dict]:
-        """
-        ワークフローを承認します
-        承認更新時に呼び出され、ワークフローインスタンスのステップを更新します
-        
-        Args:
-            approval_id: 承認ID
-            application_id: 申請ID
-            approver_id: 承認者ID
-            status: 承認ステータス（approved/rejected）
-            token: 認証トークン（オプション、外部サービス呼び出し時に使用）
-            
-        Returns:
-            ワークフロー承認レスポンスの辞書、取得失敗時はNone
-        """
-        # スタブ実装を使用する設定の場合
         if settings.workflow_service_use_stub:
             logger.info(f"WorkflowService: スタブ実装を使用(設定による)。approval_id={approval_id}, application_id={application_id}")
             return WorkflowService._approve_workflow_stub(approval_id, application_id, approver_id, status)
         
-        # 外部サービスから取得を試みる
         result = WorkflowService._approve_workflow_via_api(approval_id, application_id, approver_id, status, token)
         
         if result:
             return result
         
-        # 外部サービスが利用できない場合
-        # スタブ実装が有効な場合のみフォールバック
         if settings.workflow_service_use_stub:
             logger.warning(f"WorkflowService: 外部サービスが利用できないため、スタブ実装を使用中。approval_id={approval_id}, application_id={application_id}")
             return WorkflowService._approve_workflow_stub(approval_id, application_id, approver_id, status)
         
-        # スタブ実装が無効な場合、エラーをログに記録してNoneを返す
         logger.error(f"WorkflowService: 外部サービスでワークフローを承認できませんでした。approval_id={approval_id}, application_id={application_id}")
         return None
     
     @staticmethod
     def _approve_workflow_stub(approval_id: str, application_id: str, approver_id: str, status: str) -> dict:
-        """
-        スタブ実装: ワークフロー承認レスポンスを返します
-        
-        Args:
-            approval_id: 承認ID
-            application_id: 申請ID
-            approver_id: 承認者ID
-            status: 承認ステータス
-            
-        Returns:
-            ワークフロー承認レスポンスの辞書
-        """
         return {
             "applicationId": application_id,
             "currentStep": 1,

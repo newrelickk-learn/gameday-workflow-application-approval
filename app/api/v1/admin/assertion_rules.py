@@ -15,12 +15,6 @@ router = APIRouter()
 
 
 class UpdateAssertionRuleRequest(BaseModel):
-    """
-    assertion_rules恒久対応更新リクエストスキーマ
-
-    単一の共有環境を複数チームが同時に触るため、DBを直接UPDATEするのではなく、
-    このAPI経由でチーム（company_id）ごとの行のみを更新できるようにする。
-    """
     config: Optional[Dict[str, Any]] = Field(None, description="ルールタイプ毎のパラメータ")
     error_message: Optional[str] = Field(None, alias="errorMessage", description="エラーメッセージ")
     is_active: Optional[bool] = Field(None, alias="isActive", description="有効フラグ")
@@ -30,7 +24,6 @@ class UpdateAssertionRuleRequest(BaseModel):
 
 
 class AssertionRuleResponse(BaseModel):
-    """assertion_rulesレスポンススキーマ"""
     id: str
     application_type: str = Field(..., alias="applicationType")
     target_field: str = Field(..., alias="targetField")
@@ -47,16 +40,11 @@ class AssertionRuleResponse(BaseModel):
 
 
 def _resolve_company_id(current_user: dict) -> Optional[str]:
-    """
-    認証トークンからCompanyIdを解決します
-    （assertion_rulesの更新可否の認可チェックに使用）
-    """
     token = current_user.get("_token")
     user_id = current_user.get("user_id") or current_user.get("sub")
     user_info = UserService.get_user_info(user_id, token)
     if not user_info:
         return None
-    # PascalCase (CompanyId) と camelCase (companyId) の両方に対応
     company_id = user_info.get("CompanyId") or user_info.get("companyId")
     if company_id is None:
         return None
@@ -87,7 +75,6 @@ async def update_assertion_rule(
     db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
 ) -> AssertionRuleResponse:
-    """assertion_rulesの1行をcompany_idスコープで更新します"""
     rule = db.query(AssertionRule).filter(AssertionRule.id == id).first()
     if not rule:
         raise HTTPException(
@@ -102,9 +89,6 @@ async def update_assertion_rule(
             detail={"error": "UNAUTHORIZED", "message": "ユーザーのCompanyIdが取得できませんでした"},
         )
 
-    # 認可チェック: トークンのcompany_idと対象行のcompany_idが一致する場合のみ更新可。
-    # company_id is None の分岐は防御的に残す（現行のシードは各チームがcompany_idごとの
-    # 専用行を最初から持つ運用のため、通常はこの分岐に到達しない想定）。
     if rule.company_id is None or rule.company_id != token_company_id:
         logger.warning(
             "AssertionRulesAdmin: 権限のないcompany_idからの更新要求を拒否しました - "

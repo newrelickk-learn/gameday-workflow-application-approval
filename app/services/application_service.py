@@ -12,19 +12,14 @@ from app.services.user_service import UserService, ManagerNotFoundError
 from app.services.workflow_service import WorkflowService
 from app.services.validation_service import ValidationError
 from app.services.chapter_progress_service import ChapterProgressService
+from app.services.chapter_diagnosis_service import ChapterDiagnosisService
 
-# 申請タイプ別のGameDay演習の章番号。申請の作成に成功した時点で、その章の
-# クリアをchapter_progressに記録する（第1章=経費申請、第3章=出張申請、
-# 第5章=プロモーション申請）。第2章・第4章は別途、原因診断ドロップダウンの
-# 正解判定（chapter_diagnosis.py）で記録される。
 CHAPTER_BY_APPLICATION_TYPE = {
     ApplicationType.EXPENSE.value: 1,
     ApplicationType.BUSINESS_TRIP.value: 3,
     ApplicationType.PROMOTION.value: 5,
 }
 
-# 申請書番号のタイプ別Prefix。カウンターテーブル(application_number_counters)の
-# application_typeキーおよびApplication.typeの値と1:1で対応させる。
 APPLICATION_NUMBER_PREFIX_BY_TYPE = {
     ApplicationType.BUSINESS_TRIP.value: "BT",
     ApplicationType.EXPENSE.value: "EX",
@@ -32,20 +27,12 @@ APPLICATION_NUMBER_PREFIX_BY_TYPE = {
     ApplicationType.PROMOTION.value: "PR",
 }
 
-# 第1章クリアの追加条件: 経費申請作成時にNew Relicの分散トレースで確認できる
-# サービス呼び出し順（frontend -> application-approval -> user）を正しく回答
-# していること。回答はフロントエンドの3つのドロップダウンで送られてくる。
-DEPENDENCY_CHAIN_ANSWER = [
-    "gameday-workflow-frontend",
-    "gameday-workflow-application-approval",
-    "gameday-workflow-user",
-]
+UNSTABLE_CITY_NAME = "北九州"
 
 logger = logging.getLogger(__name__)
 
 
 class ApplicationService:
-    """申請サービス"""
     
     @staticmethod
     def _determine_approver(
@@ -56,56 +43,22 @@ class ApplicationService:
         applicant_id: Optional[str] = None,
         amount: Optional[float] = None,
     ) -> Tuple[Optional[str], Optional[str], Optional[str], int, int]:
-        """
-        申請タイプとCompanyIdに応じて承認者を決定します
-        ワークフローサービスからワークフロー定義を取得して使用します。
-
-        Args:
-            application_type: 申請タイプ
-            company_id: 会社ID(必須)
-            token: 認証トークン(オプション、ユーザー情報取得時に使用)
-            step: 承認ステップ(デフォルト: 1)
-            applicant_id: 申請者ID(オプション)。経費申請(expense)で承認者ロールが
-                上長(manager)の場合、company_idベースの計算ではなく
-                User Serviceの直属マネージャー(GET /users/{id}/manager)を優先して使用する。
-            amount: 申請金額(オプション)。経費申請(expense)のワークフロー定義取得
-                (get_workflow_definition)に伝播させ、workflow-notification側でExpense
-                (通常/2ステップ)とExpenseSettlement(高額/3ステップ)を正しく振り分けさせる。
-                申請作成時(start_workflow)だけでなく、承認ステップ遷移時にも同じ定義を
-                参照する必要があるため、ここでも必須で渡す。
-
-        Returns:
-            (next_approver_id, next_approver_name, next_approver_department, current_step, total_steps)のタプル
-
-        Raises:
-            ValidationError: 経費申請で直属マネージャーが見つからない場合(error_code="APPROVER_NOT_FOUND")
-        """
-        # CompanyIdが指定されていない場合はエラー
         if company_id is None:
             logger.error("ApplicationService: CompanyIdが指定されていません")
             raise ValueError("CompanyIdが必須です")
         
-        # CompanyIdに基づいて承認者IDを計算
-        # 各会社ごとに異なるユーザーIDを使用
         def get_approver_id_by_role(role: str, company_id: int) -> str:
-            """ロールとCompanyIdから承認者IDを取得"""
-            # ロール名のマッピング(日本語と英語の両方に対応)
             role_lower = role.lower()
             if role_lower in ["manager", "上長"]:
-                # 上長: ID 21051-21100 (各会社ごとに1名)
                 return str(21051 + company_id - 1)
             elif role_lower in ["director", "本部長"]:
-                # 本部長: ID 1051-1100 (各会社ごとに1名)
                 return str(1051 + company_id - 1)
             elif role_lower in ["accounting", "経理"]:
-                # 経理: ID 16051-16100 (各会社ごとに1名)
                 return str(16051 + company_id - 1)
             else:
-                # 不明なロールの場合はエラー
                 logger.error(f"ApplicationService: 不明な承認者ロール: {role}")
                 raise ValueError(f"不明な承認者ロール: {role}")
         
-        # ワークフローサービスからワークフロー定義を取得
         workflow_definition = WorkflowService.get_workflow_definition(
             application_type=application_type,
             company_id=company_id,
@@ -114,14 +67,12 @@ class ApplicationService:
         )
         
         if not workflow_definition or not workflow_definition.get("steps"):
-            # ワークフロー定義が取得できない場合はエラー
             logger.error(f"ApplicationService: ワークフロー定義が取得できませんでした。application_type={application_type}, company_id={company_id}")
             raise ValueError(f"ワークフロー定義が取得できません: application_type={application_type}")
         
         steps = workflow_definition.get("steps", [])
         total_steps = len(steps)
         
-        # 指定されたステップの次のステップを探す
         next_step_number = step + 1
         next_step = None
         for s in steps:
@@ -129,23 +80,18 @@ class ApplicationService:
                 next_step = s
                 break
         
-        # 次のステップがない場合(最終ステップ)
         if not next_step:
             return None, None, None, step, total_steps
         
-        # 次のステップの承認者ロールから承認者IDを取得
         approver_role = next_step.get("approverRole", "")
         if not approver_role:
             logger.error(f"ApplicationService: 承認者ロールが指定されていません。step={next_step_number}")
             raise ValueError(f"承認者ロールが指定されていません: step={next_step_number}")
         
-        # カスタム属性: ワークフロー情報
         newrelic.agent.add_custom_attribute('workflow_step', next_step_number)
         newrelic.agent.add_custom_attribute('workflow_total_steps', total_steps)
         newrelic.agent.add_custom_attribute('approver_role', approver_role)
         
-        # 経費申請(expense)の「上長」ステップは、company_idベースの計算ではなく
-        # User Serviceの直属マネージャー(ManagerId)を承認者として使用する。
         role_lower = approver_role.lower()
         is_manager_role = role_lower in ["manager", "上長"]
 
@@ -192,15 +138,6 @@ class ApplicationService:
     
     @staticmethod
     def _issue_application_number(db: Session, company_id: int, application_type: str) -> str:
-        """
-        application_number_counters（会社×タイプごとに1行）をSELECT ... FOR UPDATEで
-        ロックしてインクリメントし、「Prefix + 6桁ゼロ埋め連番」形式の申請書番号を発行します。
-        連番は会社ごとに独立してリセットされる（他社の件数とは無関係に1から始まる）。
-
-        create_applicationと同一のdbセッション・同一トランザクション内で呼び出すこと
-        （このメソッド内ではcommitしない。呼び出し元のdb.commit()で、申請本体のINSERTと
-        カウンター更新が一括してコミット/ロールバックされるようにする）。
-        """
         prefix = APPLICATION_NUMBER_PREFIX_BY_TYPE.get(application_type)
         if not prefix:
             logger.error(f"ApplicationService: 未知の申請タイプのため申請書番号を発行できません。application_type={application_type}")
@@ -216,8 +153,6 @@ class ApplicationService:
             .first()
         )
         if counter is None:
-            # 想定外だが、カウンター行が無い場合は0スタートで新規作成する
-            # （テスト用SQLite DB等、初期化SQLでのINSERTが反映されていない環境向け）
             counter = ApplicationNumberCounter(company_id=company_id, application_type=application_type, last_number=0)
             db.add(counter)
             db.flush()
@@ -233,25 +168,12 @@ class ApplicationService:
         application_data: CreateApplicationRequest,
         token: Optional[str] = None
     ) -> Application:
-        """
-        申請を作成します
-        
-        注意: このメソッドはバリデーション済みのデータを受け取ることを前提としています。
-        バリデーションはエンドポイント層で実行されます。
-        
-        Args:
-            db: データベースセッション
-            application_data: 申請データ
-            token: 認証トークン（オプション、ユーザー情報取得時に使用）
-        """
-        # 申請者のCompanyIdを取得
         applicant_info = UserService.get_user_info(application_data.applicant_id, token)
         
         if not applicant_info:
             logger.error(f"ApplicationService: 申請者情報が取得できませんでした。applicant_id={application_data.applicant_id}")
             raise ValueError(f"申請者情報が取得できません: applicant_id={application_data.applicant_id}")
         
-        # PascalCase (CompanyId) と camelCase (companyId) の両方に対応
         company_id = applicant_info.get("CompanyId") or applicant_info.get("companyId")
         if company_id:
             try:
@@ -264,15 +186,11 @@ class ApplicationService:
             logger.error(f"ApplicationService: 申請者のCompanyIdが取得できませんでした。applicant_id={application_data.applicant_id}, applicant_info={applicant_info}")
             raise ValueError(f"申請者のCompanyIdが取得できません: applicant_id={application_data.applicant_id}")
         
-        # カスタム属性: 会社ID、申請者ロール
         newrelic.agent.add_custom_attribute('service_company_id', company_id)
         applicant_role = applicant_info.get("role")
         if applicant_role:
             newrelic.agent.add_custom_attribute('applicant_role', applicant_role)
         
-        # まずワークフローを開始して、total_stepsを取得
-        # ワークフロー開始前に申請を作成する必要があるため、一時的にデフォルト値を使用
-        # ワークフロー開始後にtotal_stepsを更新する
         next_approver_id, next_approver_name, next_approver_department, current_step, _ = \
             ApplicationService._determine_approver(
                 application_data.type, company_id, token, 1,
@@ -280,11 +198,8 @@ class ApplicationService:
                 amount=application_data.amount,
             )
         
-        # 一時的なtotal_steps（後で更新される）
         total_steps = 1
 
-        # 申請書番号を発行（会社×タイプごとに連番、company_idスコープの検索APIで使う。
-        # 検索用インデックスは意図的に貼っていないため、大量データではフィルタが線形になる）
         application_number = ApplicationService._issue_application_number(db, company_id, application_data.type)
 
         application = Application(
@@ -299,7 +214,7 @@ class ApplicationService:
             applicant_id=application_data.applicant_id,
             company_id=company_id,
             application_number=application_number,
-            status=str(ApplicationStatus.PENDING.value),  # Enumの値を明示的に文字列として使用
+            status=str(ApplicationStatus.PENDING.value),  
             current_step=current_step,
             total_steps=total_steps,
             next_approver_id=next_approver_id,
@@ -314,7 +229,6 @@ class ApplicationService:
         logger.info(f"ApplicationService: 申請作成完了 - id={application.id}, "
                    f"next_approver_id={application.next_approver_id}")
         
-        # ワークフローを開始して承認レコードを作成
         try:
             workflow_result = WorkflowService.start_workflow(
                 application_id=application.id,
@@ -324,10 +238,8 @@ class ApplicationService:
                 amount=application_data.amount,
             )
             if workflow_result:
-                # ワークフロー開始レスポンスからtotal_stepsを取得
                 total_steps_from_workflow = workflow_result.get('totalSteps')
                 if total_steps_from_workflow:
-                    # total_stepsを更新
                     application.total_steps = total_steps_from_workflow
                     db.commit()
                     db.refresh(application)
@@ -341,15 +253,7 @@ class ApplicationService:
                 logger.warning(f"ApplicationService: ワークフロー開始失敗 - application_id={application.id}")
         except Exception as e:
             logger.error(f"ApplicationService: ワークフロー開始中にエラーが発生しました: {e}")
-            # ワークフロー開始の失敗は申請作成を阻害しない
 
-        # GameDay演習: 申請作成に成功した時点（=ここまで例外なく到達した時点）で、
-        # 対応する章のクリアを記録する。
-        # 第1章は、申請者が実際に「入社手続きの登録漏れでManagerIdがNULLだった
-        # 新人エンジニア」(IsChapter1Target)であり、かつNew Relicの分散トレースで
-        # 確認できるサービス依存関係チェーンに正しく回答している場合に限りクリアと
-        # して記録する（上長を元から持っている他のエンジニアが経費申請しただけ、
-        # または依存関係チェーンに回答していない・誤っている場合はクリアにしない）。
         chapter = CHAPTER_BY_APPLICATION_TYPE.get(application_data.type)
         if chapter == 1:
             is_chapter1_target = applicant_info.get("IsChapter1Target")
@@ -357,14 +261,20 @@ class ApplicationService:
                 is_chapter1_target = applicant_info.get("isChapter1Target")
             if not is_chapter1_target:
                 chapter = None
-            elif application_data.dependency_chain != DEPENDENCY_CHAIN_ANSWER:
+            elif not ChapterDiagnosisService.check_ordered_list_answer(
+                "chapter1_dependency_chain_answer", application_data.dependency_chain or []
+            ):
+                chapter = None
+        elif chapter == 3:
+            departure_matches = application_data.departure_city_name == UNSTABLE_CITY_NAME
+            arrival_matches = application_data.arrival_city_name == UNSTABLE_CITY_NAME
+            if not (departure_matches or arrival_matches):
                 chapter = None
         if chapter is not None:
             try:
                 ChapterProgressService.mark_cleared(db, str(company_id), chapter)
             except Exception as e:
                 logger.error(f"ApplicationService: chapter_progressの記録に失敗しました: {e}")
-                # 章クリアの記録失敗は申請作成を阻害しない
 
         return application
     
@@ -373,7 +283,6 @@ class ApplicationService:
         db: Session,
         application_id: str
     ) -> Optional[Application]:
-        """申請IDで申請を取得します"""
         return db.query(Application).filter(Application.id == application_id).first()
     
     @staticmethod
@@ -387,25 +296,6 @@ class ApplicationService:
         skip: int = 0,
         limit: Optional[int] = None
     ) -> List[Application]:
-        """申請一覧を取得します
-
-        company_id を指定すると、その会社の申請だけをDBレベルで絞り込む
-        （承認者向け「申請書一覧」で自社分だけを取得するために使う。
-        以前はcompany_idでのSQLフィルタが無く、全社分をLIMIT 1000で一括取得
-        してからPythonループで絞り込んでいたため、データ量増加時にPodの
-        liveness probeタイムアウトを引き起こした）。
-
-        application_number を指定すると申請書番号で絞り込む。company_idフィルタと
-        併用されるため対象行数自体は絞られるが、application_number列には検索用
-        インデックスを意図的に貼っていないため、company_idで絞り込んだ後の行に対する
-        一致判定は各社のデータ量に比例した線形フィルタになる（GameDay演習用の
-        意図的な性能問題）。
-
-        limitは指定しない限り上限なし（以前はapplicant_id指定時にlimit=100・
-        ORDER BYなしだったため、101件目以降の申請がPostgresの返す順序次第で
-        一覧から漏れることがあった。ORDER BY created_at DESCと合わせて、
-        件数上限そのものを撤廃する）。
-        """
         query = db.query(Application)
 
         filters = []
@@ -434,9 +324,6 @@ class ApplicationService:
         status: Optional[ApplicationStatus] = None,
         company_id: Optional[int] = None,
     ) -> int:
-        """申請件数だけをSQLのCOUNTで取得します（get_applicationsと違い、行を取得しないため
-        申請者名・コメント等の付随情報を取得するN+1が発生しない。ダッシュボードの件数表示等、
-        件数だけが必要な場面で使う）"""
         query = db.query(Application)
 
         filters = []
@@ -456,7 +343,6 @@ class ApplicationService:
         application_id: str,
         status: ApplicationStatus
     ) -> Optional[Application]:
-        """申請ステータスを更新します"""
         application = ApplicationService.get_application(db, application_id)
         if not application:
             return None

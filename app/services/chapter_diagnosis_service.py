@@ -15,20 +15,10 @@ _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 
 class ChapterDiagnosisService:
-    """
-    GameDay演習の「New Relicでしか分からない原因を選ばせる」診断ドロップダウン
-    （第2章・第4章・第5章など）向けの共通サービス
-
-    章ごとの正解テキストと選択肢は、いずれもリポジトリにAES-256-GCMで暗号化して
-    保存されており（app/data/chapter{N}_answer.enc.json / chapter{N}_options.enc.json）、
-    復号鍵（CHAPTER_DIAGNOSIS_KEY環境変数、GitHub Secretからk8s Secret経由で注入）は
-    このサービスのコンテナ内にしか存在しない。選択肢はダッシュボード表示のために
-    復号して返す必要があるが、どれが正解かはレスポンスに含めない
-    （正解判定は選択されたテキストとの一致判定のみで行う）。
-    """
 
     _cached_answers: Dict[int, str] = {}
     _cached_options: Dict[int, List[str]] = {}
+    _cached_list_answers: Dict[int, List[str]] = {}
 
     @classmethod
     def _decrypt_file(cls, path: Path) -> Optional[bytes]:
@@ -77,11 +67,6 @@ class ChapterDiagnosisService:
 
     @classmethod
     def get_shuffled_options(cls, chapter: int) -> List[str]:
-        """
-        指定した章の選択肢を復号し、リクエストごとにシャッフルして返します
-
-        （常に同じ並び順だと、正解の位置を覚えてしまい暗記で突破できてしまうため）
-        """
         options = cls._decrypt_options(chapter)
         if options is None:
             return []
@@ -91,8 +76,26 @@ class ChapterDiagnosisService:
 
     @classmethod
     def check_answer(cls, chapter: int, submitted_text: str) -> bool:
-        """参加者が選んだ選択肢のテキストが、指定した章の正解と一致するかを判定します"""
         answer = cls._decrypt_answer(chapter)
         if answer is None:
             return False
         return submitted_text.strip() == answer.strip()
+
+    @classmethod
+    def _decrypt_list_answer(cls, name: str) -> Optional[List[str]]:
+        cache_key = name
+        if cache_key in cls._cached_list_answers:
+            return cls._cached_list_answers[cache_key]
+        plaintext = cls._decrypt_file(_DATA_DIR / f"{name}.enc.json")
+        if plaintext is None:
+            return None
+        answer = json.loads(plaintext.decode("utf-8"))
+        cls._cached_list_answers[cache_key] = answer
+        return answer
+
+    @classmethod
+    def check_ordered_list_answer(cls, name: str, submitted: List[str]) -> bool:
+        answer = cls._decrypt_list_answer(name)
+        if answer is None:
+            return False
+        return list(submitted) == list(answer)

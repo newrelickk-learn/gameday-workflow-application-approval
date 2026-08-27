@@ -1,24 +1,3 @@
-#!/usr/bin/env python3
-"""
-GameDay演習の「New Relicでしか分からない正解」や選択肢データをAES-256-GCMで
-暗号化するツール。
-
-正解や選択肢をソースコードに平文で置くと、リポジトリを読める人には見えてしまい、
-New Relicを見ずに突破できてしまう。このスクリプトは任意のテキスト（文字列 or
-JSON配列）を暗号化し、暗号文（リポジトリにコミットして良い）と復号鍵
-（GitHub Secretとしてのみ保存し、コミットしない）を分離して出力する。
-
-使い方:
-  # 単一の正解テキストを暗号化
-  python3 scripts/encrypt_chapter_data.py --name chapter2_answer --text "正解のテキスト"
-
-  # 選択肢リスト（JSON配列）を暗号化
-  python3 scripts/encrypt_chapter_data.py --name chapter2_options --json-file options.json
-
-既存の鍵で別のデータを暗号化し直したい場合（鍵のローテーションはせず、
-内容だけ変えたい場合）は --key オプションで既存の鍵（base64）を渡す。
-同じ鍵を複数のファイル（正解・選択肢など）で共有してもよい。
-"""
 import argparse
 import base64
 import json

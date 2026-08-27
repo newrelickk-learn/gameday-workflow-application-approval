@@ -19,12 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class ApproverNotFoundException(HTTPException):
-    """
-    次の承認者が見つからない場合の専用例外。
-    従来はValidationError(APPROVER_NOT_FOUND)がこのエンドポイントの汎用except節に
-    捕捉され、New Relic上では原因を特定できない汎用的なfastapi.exceptions:HTTPException
-    としてしか記録されなかったため、専用の例外クラスとして区別できるようにする。
-    """
     def __init__(self, message: str, field: Optional[str] = None):
         super().__init__(
             status_code=http_status.HTTP_404_NOT_FOUND,
@@ -33,17 +27,10 @@ class ApproverNotFoundException(HTTPException):
 
 
 def _apply_game_progress_on_approval(db: Session, application, token: Optional[str]) -> None:
-    """
-    申請が approved になった際に game_progress.virtual_date_offset_days を更新するフック。
-
-    game_progressの更新はGameDayの進行表示（frontendの仮想今日）のためだけの処理であり、
-    失敗しても承認処理自体（レスポンス）をブロックしないようにする。
-    """
     try:
         applicant_info = UserService.get_user_info(application.applicant_id, token)
         company_id = None
         if applicant_info:
-            # PascalCase (CompanyId) と camelCase (companyId) の両方に対応
             company_id = applicant_info.get("CompanyId") or applicant_info.get("companyId")
         if company_id is not None:
             company_id = str(company_id)
@@ -56,7 +43,6 @@ def _apply_game_progress_on_approval(db: Session, application, token: Optional[s
 
 
 class UpdateApprovalRequest(BaseModel):
-    """承認更新リクエストスキーマ"""
     approval_id: str = Field(..., alias="approvalId", description="承認ID")
     application_id: str = Field(..., alias="applicationId", description="申請ID")
     approver_id: str = Field(..., alias="approverId", description="承認者ID")
@@ -68,7 +54,6 @@ class UpdateApprovalRequest(BaseModel):
 
 
 class UpdateApprovalResponse(BaseModel):
-    """承認更新レスポンススキーマ"""
     success: bool = Field(..., description="更新成功フラグ")
     message: str = Field(..., description="レスポンスメッセージ")
     application_status: Optional[str] = Field(None, alias="applicationStatus", description="更新後の申請ステータス")
@@ -89,18 +74,14 @@ async def update_approval(
     db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
 ) -> UpdateApprovalResponse:
-    """承認を更新し、申請ステータスを更新します"""
     try:
-        # カスタム属性: 承認リクエスト情報
         newrelic.agent.add_custom_attribute('approval_id', request.approval_id)
         newrelic.agent.add_custom_attribute('application_id', request.application_id)
         newrelic.agent.add_custom_attribute('approver_id', request.approver_id)
         newrelic.agent.add_custom_attribute('approval_action', request.status)
 
-        # トークンを取得（外部サービス呼び出し時に使用）
         token = current_user.get("_token")
         
-        # 申請を取得
         application = ApplicationService.get_application(db, request.application_id)
         if not application:
             raise HTTPException(
@@ -111,8 +92,6 @@ async def update_approval(
                 },
             )
         
-        # ワークフローサービスに承認を記録
-        # これにより、ワークフローインスタンスのステップが更新される
         workflow_result = WorkflowService.approve_workflow(
             approval_id=request.approval_id,
             application_id=request.application_id,
@@ -130,11 +109,7 @@ async def update_approval(
             logger.warning(f"ApprovalService: ワークフローサービスへの承認記録に失敗しましたが、処理を続行します - "
                           f"application_id={request.application_id}")
         
-        # 承認ステータスに応じて申請ステータスを更新
         if request.status == "approved":
-            # 承認された場合
-            # current_stepは現在承認待ちのステップ番号
-            # 承認後、次のステップに進むか、最終ステップなら申請を承認する
             if application.current_step is not None and application.total_steps is not None:
                 current_step = application.current_step
                 total_steps = application.total_steps
@@ -142,15 +117,12 @@ async def update_approval(
                 logger.info(f"ApprovalService: 承認処理開始 - application_id={request.application_id}, "
                            f"current_step={current_step}, total_steps={total_steps}")
                 
-                # 次のステップを計算
                 next_step = current_step + 1
                 
                 if next_step > total_steps:
-                    # すべてのステップが完了した場合、申請を承認
                     ApplicationService.update_application_status(
                         db, request.application_id, ApplicationStatus.APPROVED
                     )
-                    # ステップ情報をクリア
                     application.current_step = None
                     application.next_approver_id = None
                     application.next_approver_name = None
@@ -158,7 +130,6 @@ async def update_approval(
                     db.commit()
                     db.refresh(application)
 
-                    # GameDay: 申請タイプ別ルールでgame_progress.virtual_date_offset_daysを更新
                     _apply_game_progress_on_approval(db, application, token)
 
                     logger.info(f"ApprovalService: 申請を承認しました（全ステップ完了） - application_id={request.application_id}")
@@ -169,8 +140,6 @@ async def update_approval(
                         application_status="approved"
                     )
                 else:
-                    # 次のステップがある場合、次の承認者を設定
-                    # company_idを取得
                     applicant_info = UserService.get_user_info(application.applicant_id, token)
                     
                     if not applicant_info:
@@ -179,7 +148,6 @@ async def update_approval(
                             detail={"error": "USER_NOT_FOUND", "message": f"申請者情報が取得できません: applicant_id={application.applicant_id}"}
                         )
                     
-                    # PascalCase (CompanyId) と camelCase (companyId) の両方に対応
                     company_id = applicant_info.get("CompanyId") or applicant_info.get("companyId")
                     if company_id:
                         try:
@@ -196,7 +164,6 @@ async def update_approval(
                             detail={"error": "COMPANY_ID_NOT_FOUND", "message": f"申請者のCompanyIdが取得できません: applicant_id={application.applicant_id}"}
                         )
 
-                    # カスタム属性: 会社ID
                     newrelic.agent.add_custom_attribute('company_id', company_id)
 
                     try:
@@ -212,12 +179,10 @@ async def update_approval(
                             raise ApproverNotFoundException(message=e.message, field=e.field)
                         raise
                     
-                    # 次の承認者がNoneの場合（最終ステップ）、申請を承認
                     if next_approver_id is None:
                         ApplicationService.update_application_status(
                             db, request.application_id, ApplicationStatus.APPROVED
                         )
-                        # ステップ情報をクリア
                         application.current_step = None
                         application.next_approver_id = None
                         application.next_approver_name = None
@@ -225,7 +190,6 @@ async def update_approval(
                         db.commit()
                         db.refresh(application)
 
-                        # GameDay: 申請タイプ別ルールでgame_progress.virtual_date_offset_daysを更新
                         _apply_game_progress_on_approval(db, application, token)
 
                         logger.info(f"ApprovalService: 申請を承認しました（全ステップ完了） - application_id={request.application_id}")
@@ -236,7 +200,6 @@ async def update_approval(
                             application_status="approved"
                         )
 
-                    # 申請のcurrent_stepとnext_approverを更新
                     application.current_step = next_step
                     application.next_approver_id = next_approver_id
                     application.next_approver_name = next_approver_name
@@ -258,12 +221,10 @@ async def update_approval(
                         application_status="pending"
                     )
             else:
-                # ステップ情報がない場合、申請を承認
                 ApplicationService.update_application_status(
                     db, request.application_id, ApplicationStatus.APPROVED
                 )
 
-                # GameDay: 申請タイプ別ルールでgame_progress.virtual_date_offset_daysを更新
                 _apply_game_progress_on_approval(db, application, token)
 
                 logger.info(f"ApprovalService: 申請を承認しました（ステップ情報なし） - application_id={request.application_id}")
@@ -274,7 +235,6 @@ async def update_approval(
                     application_status="approved"
                 )
         elif request.status == "rejected":
-            # 却下された場合、申請も却下
             ApplicationService.update_application_status(
                 db, request.application_id, ApplicationStatus.REJECTED
             )

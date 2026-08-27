@@ -18,7 +18,6 @@ router = APIRouter()
 
 
 def _resolve_company_id(current_user: dict) -> str | None:
-    """current_userのトークンからCompanyIdを解決する（game_progress.pyと同じ考え方）"""
     token = current_user.get("_token")
     user_id = current_user.get("user_id") or current_user.get("sub")
     user_info = UserService.get_user_info(user_id, token)
@@ -29,12 +28,10 @@ def _resolve_company_id(current_user: dict) -> str | None:
 
 
 class ChapterOptionsResponse(BaseModel):
-    """原因診断ドロップダウンの選択肢一覧（正解は含まない）"""
     options: List[str] = Field(..., description="診断の選択肢（毎回シャッフルされる）")
 
 
 class ChapterAnswerCheckRequest(BaseModel):
-    """診断ドロップダウンで選ばれた選択肢のテキスト"""
     selected_text: str = Field(..., alias="selectedText", description="選択された診断内容")
 
     class Config:
@@ -42,7 +39,6 @@ class ChapterAnswerCheckRequest(BaseModel):
 
 
 class ChapterAnswerCheckResponse(BaseModel):
-    """判定結果（正解テキスト自体は含まない）"""
     correct: bool = Field(..., description="選択が正解と一致したか")
 
 
@@ -60,7 +56,6 @@ async def get_chapter_options(
     chapter: int,
     current_user: dict = Depends(get_current_user_dependency),
 ) -> ChapterOptionsResponse:
-    """指定した章の原因診断ドロップダウンの選択肢一覧を返します"""
     newrelic.agent.set_transaction_name('/v0.1/chapters/{chapter}/diagnosis-options')
     newrelic.agent.add_custom_attribute('chapter', chapter)
     options = ChapterDiagnosisService.get_shuffled_options(chapter)
@@ -84,7 +79,6 @@ async def check_chapter_answer(
     db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
 ) -> ChapterAnswerCheckResponse:
-    """指定した章の原因診断ドロップダウンの選択が正解かどうかを判定します"""
     newrelic.agent.set_transaction_name('/v0.1/chapters/{chapter}/check-answer')
     newrelic.agent.add_custom_attribute('chapter', chapter)
 
@@ -105,22 +99,56 @@ async def check_chapter_answer(
     return ChapterAnswerCheckResponse(correct=is_correct)
 
 
+class DependencyChainCheckRequest(BaseModel):
+    dependency_chain: List[str] = Field(..., alias="dependencyChain")
+
+    class Config:
+        populate_by_name = True
+
+
+class DependencyChainCheckResponse(BaseModel):
+    correct: bool = Field(..., description="回答が正解の並び順と一致したか")
+
+
+@router.post(
+    "/chapters/1/check-dependency-chain",
+    response_model=DependencyChainCheckResponse,
+    status_code=http_status.HTTP_200_OK,
+    summary="第1章のサービス依存関係チェーン回答の判定",
+    description=(
+        "参加者が選んだ並び順が正解と一致するかどうかだけを返す。正解の並び順は"
+        "暗号化された状態でのみサーバー側に保持しており、レスポンスには含めない。"
+        "この判定結果自体はchapter_progressのクリアには影響しない"
+        "（クリア判定は申請作成時にIsChapter1Targetと合わせてサーバー側で行う）。"
+    ),
+)
+async def check_dependency_chain(
+    request: DependencyChainCheckRequest,
+    current_user: dict = Depends(get_current_user_dependency),
+) -> DependencyChainCheckResponse:
+    newrelic.agent.set_transaction_name('/v0.1/chapters/1/check-dependency-chain')
+
+    is_correct = ChapterDiagnosisService.check_ordered_list_answer(
+        "chapter1_dependency_chain_answer", request.dependency_chain
+    )
+    newrelic.agent.add_custom_attribute('chapter.answer_correct', is_correct)
+
+    return DependencyChainCheckResponse(correct=is_correct)
+
+
 class NPlusOneQuizOptionsResponse(BaseModel):
-    """第2章N+1診断クイズ（3問構成）の選択肢一覧（正解は含まない）"""
     q1: List[str] = Field(..., description="パフォーマンス問題の種類の選択肢（毎回シャッフルされる）")
     q2: List[str] = Field(..., description="問題が発生しているテーブルの選択肢（毎回シャッフルされる）")
     q3: List[str] = Field(..., description="改善方法の選択肢（毎回シャッフルされる）")
 
 
 class NPlusOneQuizAnswersRequest(BaseModel):
-    """第2章N+1診断クイズ（3問構成）で選ばれた選択肢のテキスト"""
     q1: List[str] = Field(..., description="パフォーマンス問題の種類として選んだ内容")
     q2: List[str] = Field(..., description="問題が発生しているテーブルとして選んだ内容（複数選択）")
     q3: List[str] = Field(..., description="改善方法として選んだ内容")
 
 
 class NPlusOneQuizResultResponse(BaseModel):
-    """第2章N+1診断クイズ（3問構成）の判定結果（正解テキスト自体は含まない）"""
     q1: bool = Field(..., description="Q1（パフォーマンス問題の種類）が正解と一致したか")
     q2: bool = Field(..., description="Q2（問題が発生しているテーブル）が正解と一致したか")
     q3: bool = Field(..., description="Q3（改善方法）が正解と一致したか")
@@ -143,7 +171,6 @@ class NPlusOneQuizResultResponse(BaseModel):
 async def get_nplus1_quiz_options(
     current_user: dict = Depends(get_current_user_dependency),
 ) -> NPlusOneQuizOptionsResponse:
-    """第2章N+1診断クイズ（3問構成）の選択肢一覧を返します"""
     newrelic.agent.set_transaction_name('/v0.1/chapters/2/nplus1-quiz/options')
     options = NPlusOneQuizService.get_shuffled_options()
     return NPlusOneQuizOptionsResponse(**options)
@@ -164,7 +191,6 @@ async def check_nplus1_quiz_answers(
     db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
 ) -> NPlusOneQuizResultResponse:
-    """第2章N+1診断クイズ（3問構成）の回答をまとめて判定します"""
     newrelic.agent.set_transaction_name('/v0.1/chapters/2/nplus1-quiz/check-answers')
 
     results = NPlusOneQuizService.check_answers(request.q1, request.q2, request.q3)
@@ -190,7 +216,6 @@ async def check_nplus1_quiz_answers(
 
 
 class ChapterProgressResponse(BaseModel):
-    """今日クリア済みの章番号一覧"""
     cleared_chapters: List[int] = Field(..., alias="clearedChapters")
 
     class Config:
@@ -208,7 +233,6 @@ async def get_chapter_progress(
     db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
 ) -> ChapterProgressResponse:
-    """今日クリア済みの章番号一覧を返します"""
     newrelic.agent.set_transaction_name('/v0.1/chapters/progress')
 
     company_id = _resolve_company_id(current_user)

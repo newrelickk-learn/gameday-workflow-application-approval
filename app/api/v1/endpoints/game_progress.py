@@ -15,7 +15,6 @@ router = APIRouter()
 
 
 class GameProgressResponse(BaseModel):
-    """GameDay仮想時間進行状態レスポンススキーマ"""
     virtual_date_offset_days: int = Field(
         ..., alias="virtualDateOffsetDays", description="実際の今日からのオフセット日数"
     )
@@ -43,7 +42,6 @@ async def get_game_progress(
     db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
 ) -> GameProgressResponse:
-    """ログイン中ユーザーのcompany_idに対応するgame_progressを取得します"""
     newrelic.agent.set_transaction_name('/v0.1/game_progress')
 
     token = current_user.get("_token")
@@ -57,7 +55,6 @@ async def get_game_progress(
             detail={"error": "UNAUTHORIZED", "message": "ユーザー情報を取得できませんでした"},
         )
 
-    # PascalCase (CompanyId) と camelCase (companyId) の両方に対応
     company_id = user_info.get("CompanyId") or user_info.get("companyId")
     if company_id is None:
         raise HTTPException(

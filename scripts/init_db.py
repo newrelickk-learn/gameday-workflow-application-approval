@@ -1,12 +1,6 @@
-#!/usr/bin/env python3
-"""
-データベース初期化スクリプト
-テーブルを作成します
-"""
 import sys
 import os
 
-# プロジェクトルートをパスに追加
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.db.base import Base
@@ -14,7 +8,6 @@ from app.db.session import engine
 from app.core.config import settings
 
 def init_db():
-    """データベーステーブルを作成します"""
     print(f"データベースURL: {settings.database_url}")
     print("テーブルを作成中...")
     

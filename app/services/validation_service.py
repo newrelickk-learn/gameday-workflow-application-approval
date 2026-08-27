@@ -9,13 +9,10 @@ from app.services.rules.evaluator import AssertionRuleEvaluator
 from app.services.game_progress_service import GameProgressService
 from app.services.chapter_progress_service import ChapterProgressService
 
-# プロモーション申請（第5章）を作成するには、その日のうちに第0〜4章を
-# すべてクリア済みである必要がある。
 PROMOTION_PREREQUISITE_CHAPTERS = [0, 1, 2, 3, 4]
 
 
 class ValidationError(Exception):
-    """バリデーションエラー"""
     def __init__(self, error_code: str, message: str, field: Optional[str] = None):
         self.error_code = error_code
         self.message = message
@@ -24,9 +21,7 @@ class ValidationError(Exception):
 
 
 class ValidationService:
-    """申請バリデーションサービス"""
     
-    # 出張申請の最低申請期間（日数）
     BUSINESS_TRIP_MIN_ADVANCE_DAYS = 14
     
     @staticmethod
@@ -35,17 +30,6 @@ class ValidationService:
         user_id: str,
         token: Optional[str] = None
     ) -> None:
-        """
-        申請タイプとユーザー権限をチェックします
-        
-        Args:
-            application_type: 申請タイプ
-            user_id: ユーザーID
-            
-        Raises:
-            ValidationError: バリデーションエラー時
-        """
-        # 申請タイプの存在チェック
         try:
             app_type = ApplicationType(application_type)
         except ValueError:
@@ -56,7 +40,6 @@ class ValidationService:
                 field="type"
             )
         
-        # プロモーション申請は上長のみが申請可能
         if app_type == ApplicationType.PROMOTION:
             if not UserService.is_manager(user_id, token):
                 raise ValidationError(
@@ -72,21 +55,6 @@ class ValidationService:
         end_date: Optional[date],
         virtual_today: Optional[date] = None
     ) -> None:
-        """
-        日付のバリデーションを行います
-
-        Args:
-            application_type: 申請タイプ
-            start_date: 開始日
-            end_date: 終了日
-            virtual_today: 出張申請の2週間前チェックに使う「今日」。
-                GameDayの演習用に、company_idのgame_progress.virtual_date_offset_days
-                を反映した仮想の今日を渡す。未指定の場合は実際の今日にフォールバックする。
-
-        Raises:
-            ValidationError: バリデーションエラー時
-        """
-        # 開始日と終了日の存在チェック（日付が必要な申請タイプの場合）
         if application_type in [ApplicationType.BUSINESS_TRIP.value, ApplicationType.VACATION.value]:
             if not start_date:
                 raise ValidationError(
@@ -101,7 +69,6 @@ class ValidationService:
                     field="endDate"
                 )
             
-            # 開始日 <= 終了日のチェック（開始日と終了日が同じ日帰りは許可する）
             if start_date > end_date:
                 raise ValidationError(
                     error_code="INVALID_DATE_RANGE",
@@ -109,7 +76,6 @@ class ValidationService:
                     field="startDate"
                 )
             
-            # 出張申請の2週間前チェック
             if application_type == ApplicationType.BUSINESS_TRIP.value:
                 today = virtual_today if virtual_today is not None else date.today()
                 min_start_date = today + timedelta(days=ValidationService.BUSINESS_TRIP_MIN_ADVANCE_DAYS)
@@ -126,16 +92,6 @@ class ValidationService:
         application_type: str,
         data: CreateApplicationRequest
     ) -> None:
-        """
-        必須フィールドのチェックを行います
-        
-        Args:
-            application_type: 申請タイプ
-            data: 申請データ
-            
-        Raises:
-            ValidationError: バリデーションエラー時
-        """
         if application_type == ApplicationType.BUSINESS_TRIP.value:
             if not data.start_date:
                 raise ValidationError(
@@ -176,16 +132,6 @@ class ValidationService:
     def validate_business_rules(
         data: CreateApplicationRequest
     ) -> None:
-        """
-        その他のビジネスルールチェックを行います
-        
-        Args:
-            data: 申請データ
-            
-        Raises:
-            ValidationError: バリデーションエラー時
-        """
-        # 金額が指定されている場合、正の数であること
         if data.amount is not None:
             if data.amount <= 0:
                 raise ValidationError(
@@ -194,7 +140,6 @@ class ValidationService:
                     field="amount"
                 )
         
-        # 日数が指定されている場合、正の数であること
         if data.days is not None:
             if data.days <= 0:
                 raise ValidationError(
@@ -205,21 +150,9 @@ class ValidationService:
     
     @staticmethod
     def _resolve_company_id(user_id: str, token: Optional[str] = None) -> Optional[str]:
-        """
-        ユーザーIDからCompanyIdを解決します
-        （assertion_rulesのcompany_idスコープ判定に使用）
-
-        Args:
-            user_id: ユーザーID
-            token: 認証トークン（オプション、外部サービス呼び出し時に使用）
-
-        Returns:
-            CompanyIdの文字列表現、取得できない場合はNone
-        """
         user_info = UserService.get_user_info(user_id, token)
         if not user_info:
             return None
-        # PascalCase (CompanyId) と camelCase (companyId) の両方に対応
         company_id = user_info.get("CompanyId") or user_info.get("companyId")
         if company_id is None:
             return None
@@ -232,30 +165,10 @@ class ValidationService:
         token: Optional[str] = None,
         db: Optional[Session] = None
     ) -> None:
-        """
-        申請データの全バリデーションを実行します
-
-        Args:
-            data: 申請データ
-            user_id: ユーザーID
-            token: 認証トークン（オプション、外部サービス呼び出し時に使用）
-            db: データベースセッション（オプション、プロモーション申請のDB設定ルール評価に使用）
-
-        Raises:
-            ValidationError: バリデーションエラー時
-                (プロモーション申請のdescriptionがDB設定ルールに違反した場合は
-                error_code="ASSERTION_RULE_VIOLATION")
-        """
-        # 申請タイプのバリデーション
         ValidationService.validate_application_type(data.type, user_id, token)
 
-        # 必須フィールドのチェック
         ValidationService.validate_required_fields(data.type, data)
 
-        # 日付のバリデーション
-        # 出張申請の2週間前チェックは、GameDayの演習用にcompany_idのgame_progressが
-        # 管理する仮想の今日を基準に行う（company_id/game_progressが取得できない場合は
-        # 実際の今日にフォールバックする）
         virtual_today = None
         if data.type == ApplicationType.BUSINESS_TRIP.value and db is not None:
             company_id = ValidationService._resolve_company_id(user_id, token)
@@ -265,14 +178,8 @@ class ValidationService:
                     virtual_today = date.today() + timedelta(days=progress.virtual_date_offset_days)
         ValidationService.validate_dates(data.type, data.start_date, data.end_date, virtual_today)
 
-        # その他のビジネスルールチェック
         ValidationService.validate_business_rules(data)
 
-        # 申請者IDが現在のユーザーIDと一致すること（セキュリティ）
-        # プロモーション申請は、上長が部下（プロモーション対象者）の代わりに送信するケースが
-        # 正常フローのため対象外とする（validate_application_type内のis_managerチェックで、
-        # ログイン中のユーザー自身が上長であることは既に保証されている）。
-        # 経費・出張・休暇申請など、申請者本人が送信する他の申請タイプでは引き続き必須。
         if data.type != ApplicationType.PROMOTION.value and data.applicant_id != user_id:
             raise ValidationError(
                 error_code="INVALID_APPLICANT_ID",
@@ -280,13 +187,9 @@ class ValidationService:
                 field="applicantId"
             )
 
-        # プロモーション申請の場合、descriptionに対してDB設定ルール（Strategy Pattern）を評価する。
-        # 既存のis_managerチェック（validate_application_type内）に加えて実施する。
         if data.type == ApplicationType.PROMOTION.value and db is not None:
             company_id = ValidationService._resolve_company_id(user_id, token)
 
-            # 第5章（プロモーション申請）は、当日中に第0〜4章をすべてクリア済みでなければ
-            # 申請できない（章の順序を強制するゲート）。
             if company_id:
                 cleared_today = set(ChapterProgressService.get_cleared_chapters_today(db, company_id))
                 missing = [c for c in PROMOTION_PREREQUISITE_CHAPTERS if c not in cleared_today]

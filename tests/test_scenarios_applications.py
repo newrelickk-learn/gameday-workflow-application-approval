@@ -1,13 +1,3 @@
-"""
-申請 API のシナリオテスト（他サービスと同じシナリオを網羅）。
-
-- 出張申請: エンジニアで申請 → 201
-- 経費申請: エンジニアで申請 → 201
-- 休暇申請: エンジニアで申請 → 201
-- プロモーション申請: 上長で申請 → 201、エンジニアで申請 → 400 PERMISSION_DENIED
-- 一覧・詳細・バリデーションエラー（2週間前、不正タイプ、申請者ID不一致）も確認
-- 申請書番号（applicationNumber）の発行フォーマット・連番・検索も確認
-"""
 import re
 from datetime import date, timedelta
 from unittest.mock import patch
@@ -26,11 +16,9 @@ def _future_start_end(days_ahead: int = 14, span_days: int = 3):
     return start.isoformat(), end.isoformat()
 
 
-# --- 申請作成シナリオ（成功） ---
 
 
 def test_scenario_business_trip_engineer(client):
-    """出張申請: エンジニアで申請 → 201"""
     start, end = _future_start_end(14, 3)
     payload = {
         "type": "business-trip",
@@ -55,7 +43,6 @@ def test_scenario_business_trip_engineer(client):
 
 
 def test_scenario_expense_engineer(client):
-    """経費申請: エンジニアで申請 → 201"""
     payload = {
         "type": "expense",
         "title": "交通費精算",
@@ -76,7 +63,6 @@ def test_scenario_expense_engineer(client):
 
 
 def test_scenario_vacation_engineer(client):
-    """休暇申請: エンジニアで申請 → 201"""
     start, end = _future_start_end(7, 2)
     payload = {
         "type": "vacation",
@@ -99,7 +85,6 @@ def test_scenario_vacation_engineer(client):
 
 
 def test_scenario_promotion_manager(client):
-    """プロモーション申請: 上長で申請 → 201"""
     payload = {
         "type": "promotion",
         "title": "プロモーション申請",
@@ -118,11 +103,9 @@ def test_scenario_promotion_manager(client):
     assert data["applicantId"] == MANAGER_USER_ID
 
 
-# --- 申請作成シナリオ（期待どおり失敗） ---
 
 
 def test_scenario_promotion_engineer_permission_denied(client):
-    """プロモーション申請: エンジニアで申請 → 400 PERMISSION_DENIED"""
     payload = {
         "type": "promotion",
         "title": "プロモーション申請（一般社員）",
@@ -141,7 +124,6 @@ def test_scenario_promotion_engineer_permission_denied(client):
 
 
 def test_scenario_business_trip_insufficient_advance(client):
-    """出張申請: 2週間前未満 → 400 INSUFFICIENT_ADVANCE_NOTICE"""
     start, end = _future_start_end(1, 1)
     payload = {
         "type": "business-trip",
@@ -163,7 +145,6 @@ def test_scenario_business_trip_insufficient_advance(client):
 
 
 def test_scenario_invalid_application_type(client):
-    """不正な申請タイプ → 400 INVALID_APPLICATION_TYPE"""
     payload = {
         "type": "invalid-type",
         "title": "テスト申請",
@@ -181,7 +162,6 @@ def test_scenario_invalid_application_type(client):
 
 
 def test_scenario_applicant_id_mismatch(client):
-    """申請者IDがトークンと不一致 → 400 INVALID_APPLICANT_ID"""
     start, end = _future_start_end(14, 1)
     payload = {
         "type": "business-trip",
@@ -190,7 +170,7 @@ def test_scenario_applicant_id_mismatch(client):
         "startDate": start,
         "endDate": end,
         "days": 1,
-        "applicantId": MANAGER_USER_ID,  # トークンはエンジニア
+        "applicantId": MANAGER_USER_ID,  
     }
     resp = client.post(
         "/api/v1/applications",
@@ -202,12 +182,9 @@ def test_scenario_applicant_id_mismatch(client):
     assert data.get("detail", {}).get("error") == "INVALID_APPLICANT_ID"
 
 
-# --- 一覧・詳細 ---
 
 
 def test_scenario_list_and_detail(client):
-    """申請一覧取得 → 200、申請作成 → 201、詳細取得 → 200"""
-    # 一覧（空でもよい）
     list_resp = client.get(
         "/api/v1/applications",
         headers=auth_headers(ENGINEER_USER_ID),
@@ -215,7 +192,6 @@ def test_scenario_list_and_detail(client):
     assert list_resp.status_code == 200
     assert isinstance(list_resp.json(), list)
 
-    # 1件作成
     start, end = _future_start_end(14, 2)
     create_resp = client.post(
         "/api/v1/applications",
@@ -233,7 +209,6 @@ def test_scenario_list_and_detail(client):
     assert create_resp.status_code == 201
     app_id = create_resp.json()["id"]
 
-    # 詳細
     detail_resp = client.get(
         f"/api/v1/applications/{app_id}",
         headers=auth_headers(ENGINEER_USER_ID),
@@ -244,7 +219,6 @@ def test_scenario_list_and_detail(client):
 
 
 def test_scenario_list_filter_by_status(client):
-    """申請一覧: status=pending でフィルタ → 200"""
     resp = client.get(
         "/api/v1/applications?status=pending",
         headers=auth_headers(ENGINEER_USER_ID),
@@ -254,7 +228,6 @@ def test_scenario_list_filter_by_status(client):
 
 
 def test_scenario_list_filter_by_applicant_id(client):
-    """申請一覧: applicantId でフィルタ → 200"""
     resp = client.get(
         f"/api/v1/applications?applicantId={ENGINEER_USER_ID}",
         headers=auth_headers(ENGINEER_USER_ID),
@@ -264,8 +237,6 @@ def test_scenario_list_filter_by_applicant_id(client):
 
 
 def test_scenario_list_calls_user_service_batch_once_regardless_of_application_count(client):
-    """申請一覧: 同一申請者による複数件の申請があっても、申請者情報のバッチ取得は1回だけ呼ばれる
-    （N+1解消の回帰テスト。以前は申請件数分UserService.get_user_infoがループ呼び出しされていた）"""
     start, end = _future_start_end(14, 2)
     for _ in range(3):
         resp = client.post(
@@ -293,12 +264,10 @@ def test_scenario_list_calls_user_service_batch_once_regardless_of_application_c
 
     assert list_resp.status_code == 200
     assert len(list_resp.json()) >= 3
-    # 申請件数（3件以上）に関わらず、申請者情報のバッチ取得は1回だけ
     assert mock_get_users_info.call_count == 1
 
 
 def test_scenario_get_nonexistent_application_returns_404(client):
-    """存在しない申請IDで詳細取得 → 404"""
     resp = client.get(
         "/api/v1/applications/non-existent-id",
         headers=auth_headers(ENGINEER_USER_ID),
@@ -306,11 +275,9 @@ def test_scenario_get_nonexistent_application_returns_404(client):
     assert resp.status_code == 404
 
 
-# --- 申請書番号（applicationNumber） ---
 
 
 def test_scenario_business_trip_application_number_format(client):
-    """出張申請の申請書番号 → BT-\\d{6}形式"""
     start, end = _future_start_end(14, 3)
     resp = client.post(
         "/api/v1/applications",
@@ -331,7 +298,6 @@ def test_scenario_business_trip_application_number_format(client):
 
 
 def test_scenario_expense_application_number_format(client):
-    """経費申請の申請書番号 → EX-\\d{6}形式"""
     resp = client.post(
         "/api/v1/applications",
         json={
@@ -349,7 +315,6 @@ def test_scenario_expense_application_number_format(client):
 
 
 def test_scenario_application_number_increments_per_company(client):
-    """同一会社・同一タイプで複数回作成すると申請書番号が連番で増加する"""
     start, end = _future_start_end(14, 2)
     payload = {
         "type": "vacation",
@@ -373,7 +338,6 @@ def test_scenario_application_number_increments_per_company(client):
 
 
 def test_scenario_list_filter_by_application_number(client):
-    """申請一覧: applicationNumberでフィルタ → 作成した申請がヒットする"""
     resp = client.post(
         "/api/v1/applications",
         json={
@@ -399,7 +363,6 @@ def test_scenario_list_filter_by_application_number(client):
 
 
 def test_scenario_list_filter_by_nonexistent_application_number(client):
-    """申請一覧: 存在しないapplicationNumberでフィルタ → 空配列"""
     resp = client.get(
         "/api/v1/applications?applicationNumber=BT-999999",
         headers=auth_headers(ENGINEER_USER_ID),

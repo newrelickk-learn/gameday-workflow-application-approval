@@ -17,8 +17,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """アプリケーションのライフサイクル管理"""
-    # 起動時: データベーステーブルの作成を試みる
     try:
         logger.info("データベーステーブルを作成中...")
         Base.metadata.create_all(bind=engine)
@@ -28,7 +26,6 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # シャットダウン時（必要に応じて）
     pass
 
 
@@ -42,16 +39,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 本番環境では適切なオリジンを設定
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# APIルーターの登録
 app.include_router(api_router, prefix="/api/v1")
 logger.info("APIルーターを登録しました: /api/v1")
 logger.info("登録されたエンドポイント:")
@@ -62,13 +57,11 @@ for route in app.routes:
 
 @app.get("/health")
 async def health_check():
-    """ヘルスチェックエンドポイント"""
     return {"status": "healthy", "version": settings.app_version}
 
 
 @app.get("/")
 async def root():
-    """ルートエンドポイント"""
     return {
         "message": "Application & Approval Service API",
         "version": settings.app_version,
