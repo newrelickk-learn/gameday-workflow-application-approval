@@ -38,5 +38,5 @@ SELECT
     1,
     true,
     company_id::text
-FROM generate_series(1, 50) AS company_id
+FROM generate_series(1::integer, 50::integer) AS company_id
 ON CONFLICT (id) DO NOTHING;
