@@ -22,7 +22,7 @@ SELECT
     'description',
     'regex_pattern',
     '{"pattern": "[A-Za-z]\\d+\\s*->\\s*[A-Za-z]\\d+"}'::jsonb,
-    'descriptionは「現在の等級->昇進後の等級」の形式（半角ハイフンと大なり記号）で入力してください（例: L3->L4）',
+    'バリデーションルール assertion_rule_promotion_description を満たしていません（pattern mismatch）',
     1,
     true,
     company_id::text

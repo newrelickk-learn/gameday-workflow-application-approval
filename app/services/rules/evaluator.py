@@ -1,3 +1,4 @@
+import json
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
@@ -49,6 +50,7 @@ class AssertionRuleEvaluator:
             newrelic.agent.add_custom_attribute(f'{prefix}_id', rule.id)
             newrelic.agent.add_custom_attribute(f'{prefix}_type', rule.rule_type)
             newrelic.agent.add_custom_attribute(f'{prefix}_target_field', target_field)
+            newrelic.agent.add_custom_attribute(f'{prefix}_config', json.dumps(rule.config))
             newrelic.agent.add_custom_attribute(f'{prefix}_value', value)
 
             result = STRATEGY_MAP[rule.rule_type].check(value, rule.config)
