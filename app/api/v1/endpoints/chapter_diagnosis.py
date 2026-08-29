@@ -10,6 +10,7 @@ from app.api.dependencies import get_current_user_dependency, get_db_dependency
 from app.services.chapter_diagnosis_service import ChapterDiagnosisService
 from app.services.chapter_progress_service import ChapterProgressService
 from app.services.nplus1_quiz_service import NPlusOneQuizService
+from app.services.rage_click_quiz_service import RageClickQuizService
 from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
@@ -208,6 +209,85 @@ async def check_nplus1_quiz_answers(
             )
 
     return NPlusOneQuizResultResponse(
+        q1=results["q1"],
+        q2=results["q2"],
+        q3=results["q3"],
+        allCorrect=all_correct,
+    )
+
+
+class RageClickQuizOptionsResponse(BaseModel):
+    q1: List[str] = Field(..., description="検知に使用されたNRQLクエリの選択肢（毎回シャッフルされる）")
+    q2: List[str] = Field(..., description="通知先の選択肢（毎回シャッフルされる）")
+    q3: List[str] = Field(..., description="通知の処理内容の選択肢（毎回シャッフルされる）")
+
+
+class RageClickQuizAnswersRequest(BaseModel):
+    q1: str = Field(..., description="検知に使用されたNRQLクエリとして選んだ内容")
+    q2: str = Field(..., description="通知先として選んだ内容")
+    q3: str = Field(..., description="通知の処理内容として選んだ内容")
+
+
+class RageClickQuizResultResponse(BaseModel):
+    q1: bool = Field(..., description="Q1（検知に使用されたクエリ）が正解と一致したか")
+    q2: bool = Field(..., description="Q2（通知先）が正解と一致したか")
+    q3: bool = Field(..., description="Q3（通知の処理内容）が正解と一致したか")
+    all_correct: bool = Field(..., alias="allCorrect", description="3問すべてが正解と一致したか")
+
+    class Config:
+        populate_by_name = True
+
+
+@router.get(
+    "/chapters/4/ragequiz/options",
+    response_model=RageClickQuizOptionsResponse,
+    status_code=http_status.HTTP_200_OK,
+    summary="第4章Rage Click診断クイズ（3問構成）の選択肢一覧",
+    description=(
+        "選択肢はリポジトリには暗号化された状態でのみ保存されており、"
+        "このサービスのコンテナ内でのみ復号される。どれが正解かはレスポンスに含まない。"
+    ),
+)
+async def get_rage_click_quiz_options(
+    current_user: dict = Depends(get_current_user_dependency),
+) -> RageClickQuizOptionsResponse:
+    newrelic.agent.set_transaction_name('/v0.1/chapters/4/ragequiz/options')
+    options = RageClickQuizService.get_shuffled_options()
+    return RageClickQuizOptionsResponse(**options)
+
+
+@router.post(
+    "/chapters/4/ragequiz/check-answers",
+    response_model=RageClickQuizResultResponse,
+    status_code=http_status.HTTP_200_OK,
+    summary="第4章Rage Click診断クイズ（3問構成）の判定",
+    description=(
+        "3問すべての回答をまとめて判定する。3問すべてが正解の場合のみ"
+        "chapter_progressにクリアを記録する（一部の問だけ正解の場合は記録しない）。"
+    ),
+)
+async def check_rage_click_quiz_answers(
+    request: RageClickQuizAnswersRequest,
+    db: Session = Depends(get_db_dependency),
+    current_user: dict = Depends(get_current_user_dependency),
+) -> RageClickQuizResultResponse:
+    newrelic.agent.set_transaction_name('/v0.1/chapters/4/ragequiz/check-answers')
+
+    results = RageClickQuizService.check_answers(request.q1, request.q2, request.q3)
+    all_correct = all(results.values())
+    newrelic.agent.add_custom_attribute('chapter.answer_correct', all_correct)
+
+    if all_correct:
+        company_id = _resolve_company_id(current_user)
+        if company_id:
+            newrelic.agent.add_custom_attribute('company_id', company_id)
+            ChapterProgressService.mark_cleared(db, company_id, 4)
+        else:
+            logger.warning(
+                "check_rage_click_quiz_answers: company_idが取得できないためchapter_progressを記録できません。"
+            )
+
+    return RageClickQuizResultResponse(
         q1=results["q1"],
         q2=results["q2"],
         q3=results["q3"],
