@@ -8,6 +8,7 @@ import newrelic.agent
 
 from app.api.dependencies import get_current_user_dependency, get_db_dependency
 from app.services.chapter_diagnosis_service import ChapterDiagnosisService
+from app.services.chapter_mission_service import ChapterMissionService
 from app.services.chapter_progress_service import ChapterProgressService
 from app.services.nplus1_quiz_service import NPlusOneQuizService
 from app.services.rage_click_quiz_service import RageClickQuizService
@@ -323,3 +324,35 @@ async def get_chapter_progress(
     cleared = ChapterProgressService.get_cleared_chapters_today(db, company_id)
     newrelic.agent.add_custom_attribute('chapter.cleared_count', len(cleared))
     return ChapterProgressResponse(cleared_chapters=cleared)
+
+
+class ChapterMissionResponse(BaseModel):
+    chapter: int
+    title: str
+    description: str | None = None
+
+
+class ChapterMissionsResponse(BaseModel):
+    missions: List[ChapterMissionResponse]
+
+
+@router.get(
+    "/chapters/missions",
+    response_model=ChapterMissionsResponse,
+    status_code=http_status.HTTP_200_OK,
+    summary="章ミッション一覧",
+    description="ダッシュボードに表示する、各章で参加者にやってほしいことの一覧を順序付きで返す。",
+)
+async def get_chapter_missions(
+    db: Session = Depends(get_db_dependency),
+    current_user: dict = Depends(get_current_user_dependency),
+) -> ChapterMissionsResponse:
+    newrelic.agent.set_transaction_name('/v0.1/chapters/missions')
+
+    missions = ChapterMissionService.get_active_missions(db)
+    return ChapterMissionsResponse(
+        missions=[
+            ChapterMissionResponse(chapter=m.chapter, title=m.title, description=m.description)
+            for m in missions
+        ]
+    )
