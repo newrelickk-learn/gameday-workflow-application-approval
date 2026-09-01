@@ -12,3 +12,4 @@ class ChapterMission(Base):
     description = Column(String, nullable=True)
     order = Column(Integer, nullable=False, default=0, index=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    clear_keyword = Column(String, nullable=True)

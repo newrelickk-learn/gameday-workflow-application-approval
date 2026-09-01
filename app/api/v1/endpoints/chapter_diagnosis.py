@@ -330,6 +330,10 @@ class ChapterMissionResponse(BaseModel):
     chapter: int
     title: str
     description: str | None = None
+    clear_keyword: str | None = Field(None, alias="clearKeyword")
+
+    class Config:
+        populate_by_name = True
 
 
 class ChapterMissionsResponse(BaseModel):
@@ -341,7 +345,10 @@ class ChapterMissionsResponse(BaseModel):
     response_model=ChapterMissionsResponse,
     status_code=http_status.HTTP_200_OK,
     summary="章ミッション一覧",
-    description="ダッシュボードに表示する、各章で参加者にやってほしいことの一覧を順序付きで返す。",
+    description=(
+        "ダッシュボードに表示する、各章で参加者にやってほしいことの一覧を順序付きで返す。"
+        "クリア済みの章のミッションのみ、クリア時にパネルへ表示する合言葉(clearKeyword)を含める。"
+    ),
 )
 async def get_chapter_missions(
     db: Session = Depends(get_db_dependency),
@@ -350,9 +357,20 @@ async def get_chapter_missions(
     newrelic.agent.set_transaction_name('/v0.1/chapters/missions')
 
     missions = ChapterMissionService.get_active_missions(db)
+
+    cleared_chapters: List[int] = []
+    company_id = _resolve_company_id(current_user)
+    if company_id:
+        cleared_chapters = ChapterProgressService.get_cleared_chapters_today(db, company_id)
+
     return ChapterMissionsResponse(
         missions=[
-            ChapterMissionResponse(chapter=m.chapter, title=m.title, description=m.description)
+            ChapterMissionResponse(
+                chapter=m.chapter,
+                title=m.title,
+                description=m.description,
+                clear_keyword=m.clear_keyword if m.chapter in cleared_chapters else None,
+            )
             for m in missions
         ]
     )
