@@ -194,10 +194,9 @@ class ValidationService:
                 cleared_today = set(ChapterProgressService.get_cleared_chapters_today(db, company_id))
                 missing = [c for c in PROMOTION_PREREQUISITE_CHAPTERS if c not in cleared_today]
                 if missing:
-                    missing_label = "、".join(f"第{c}章" for c in missing)
                     raise ValidationError(
                         error_code="PREREQUISITE_CHAPTERS_NOT_CLEARED",
-                        message=f"プロモーション申請を行うには、先に第0〜4章をすべてクリアする必要があります（未クリア: {missing_label}）",
+                        message=f"プロモーション申請を行うには、先に他{len(missing)}個の問題をすべてクリアする必要があります",
                         field="type",
                     )
 
