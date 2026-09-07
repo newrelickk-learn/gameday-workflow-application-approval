@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
-from typing import List
+from typing import Dict, List
 import hashlib
 import logging
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.chapter_progress import ChapterProgress
@@ -57,3 +58,14 @@ class ChapterProgressService:
             .all()
         )
         return sorted(row.chapter for row in rows)
+
+    @staticmethod
+    def get_cleared_counts_today(db: Session) -> Dict[str, int]:
+        today = datetime.now(timezone.utc).date()
+        rows = (
+            db.query(ChapterProgress.company_id, func.count(ChapterProgress.chapter))
+            .filter(ChapterProgress.cleared_date == today)
+            .group_by(ChapterProgress.company_id)
+            .all()
+        )
+        return {company_id: count for company_id, count in rows}

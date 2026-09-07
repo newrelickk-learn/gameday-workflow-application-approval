@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import applications, approvals, game_progress, chapter_diagnosis, internal
 from app.api.v1.admin import assertion_rules as admin_assertion_rules
 from app.api.v1.admin import game_progress as admin_game_progress
+from app.api.v1.admin import team_progress as admin_team_progress
 
 api_router = APIRouter()
 
@@ -12,4 +13,5 @@ api_router.include_router(chapter_diagnosis.router, tags=["Chapters"])
 api_router.include_router(internal.router, tags=["Internal"])
 api_router.include_router(admin_assertion_rules.router, tags=["Admin"])
 api_router.include_router(admin_game_progress.router, tags=["Admin"])
+api_router.include_router(admin_team_progress.router, tags=["Admin"])
 
