@@ -22,10 +22,11 @@ class Settings(BaseSettings):
     kafka_topic: Optional[str] = None
     
     workflow_service_base_url: str = "http://workflow-notification-service:8003"
-    workflow_service_use_stub: bool = False  
+    workflow_service_use_stub: bool = False
 
-    chapter_diagnosis_key: Optional[str] = None
-    
+    game_master_service_base_url: str = "http://gameday-workflow-game-master:8006"
+    game_master_service_api_key: str = "InternalServiceApiKeyForGameDayWorkflow2024!"
+
     class Config:
         env_file = ".env"
         case_sensitive = False

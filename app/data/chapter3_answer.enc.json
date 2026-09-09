@@ -1,6 +1,0 @@
-{
-  "_comment": "GameDay演習の正解/選択肢データをAES-256-GCMで暗号化したもの。復号鍵はGitHub Secret経由でk8s Secretに注入され、コンテナ内にのみ存在する。",
-  "algorithm": "AES-256-GCM",
-  "nonce_base64": "99JQ7dclvqk+3riP",
-  "ciphertext_base64": "jsDLwQxn8s9y5YLDwacTSIJrY6MDed4OKlzJE6JmPpVT7MBTeZI4+G/zRp4RMYPBrctkWGYA1YQ10kExr1qLl2J48CHqYbJ+TzEkFyLuZLYo4pyZgKnpwUpfjY7Lmikg6wh5ljL9aamBvpZ2k+byTVgYbgm6Dq0z44YGlmpcnlC1TPvvc0FGKXX0MxAmzcragI3gha5NJjSnUPwk"
-}

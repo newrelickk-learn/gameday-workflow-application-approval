@@ -11,8 +11,7 @@ from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService, ManagerNotFoundError
 from app.services.workflow_service import WorkflowService
 from app.services.validation_service import ValidationError
-from app.services.chapter_progress_service import ChapterProgressService
-from app.services.chapter_diagnosis_service import ChapterDiagnosisService
+from app.services.game_master_client import GameMasterClient
 
 CHAPTER_BY_APPLICATION_TYPE = {
     ApplicationType.EXPENSE.value: 1,
@@ -261,8 +260,8 @@ class ApplicationService:
                 is_chapter1_target = applicant_info.get("isChapter1Target")
             if not is_chapter1_target:
                 chapter = None
-            elif not ChapterDiagnosisService.check_ordered_list_answer(
-                "chapter1_dependency_chain_answer", application_data.dependency_chain or []
+            elif not GameMasterClient.check_dependency_chain_answer(
+                token, application_data.dependency_chain or []
             ):
                 chapter = None
         elif chapter == 3:
@@ -272,7 +271,7 @@ class ApplicationService:
                 chapter = None
         if chapter is not None:
             try:
-                ChapterProgressService.mark_cleared(db, str(company_id), chapter)
+                GameMasterClient.mark_chapter_cleared(str(company_id), chapter)
             except Exception as e:
                 logger.error(f"ApplicationService: chapter_progressの記録に失敗しました: {e}")
 

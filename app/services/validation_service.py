@@ -6,8 +6,7 @@ from app.models.application import ApplicationType
 from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService
 from app.services.rules.evaluator import AssertionRuleEvaluator
-from app.services.game_progress_service import GameProgressService
-from app.services.chapter_progress_service import ChapterProgressService
+from app.services.game_master_client import GameMasterClient
 
 PROMOTION_PREREQUISITE_CHAPTERS = [0, 1, 2, 3, 4]
 
@@ -170,12 +169,10 @@ class ValidationService:
         ValidationService.validate_required_fields(data.type, data)
 
         virtual_today = None
-        if data.type == ApplicationType.BUSINESS_TRIP.value and db is not None:
-            company_id = ValidationService._resolve_company_id(user_id, token)
-            if company_id:
-                progress = GameProgressService.get_active_progress(db, company_id)
-                if progress is not None:
-                    virtual_today = date.today() + timedelta(days=progress.virtual_date_offset_days)
+        if data.type == ApplicationType.BUSINESS_TRIP.value:
+            offset_days = GameMasterClient.get_game_progress(token)
+            if offset_days is not None:
+                virtual_today = date.today() + timedelta(days=offset_days)
         ValidationService.validate_dates(data.type, data.start_date, data.end_date, virtual_today)
 
         ValidationService.validate_business_rules(data)
@@ -187,19 +184,17 @@ class ValidationService:
                 field="applicantId"
             )
 
-        if data.type == ApplicationType.PROMOTION.value and db is not None:
+        if data.type == ApplicationType.PROMOTION.value:
+            cleared_today = set(GameMasterClient.get_cleared_chapters_today(token))
+            missing = [c for c in PROMOTION_PREREQUISITE_CHAPTERS if c not in cleared_today]
+            if missing:
+                raise ValidationError(
+                    error_code="PREREQUISITE_CHAPTERS_NOT_CLEARED",
+                    message=f"プロモーション申請を行うには、先に他{len(missing)}個の問題をすべてクリアする必要があります",
+                    field="type",
+                )
+
             company_id = ValidationService._resolve_company_id(user_id, token)
-
-            if company_id:
-                cleared_today = set(ChapterProgressService.get_cleared_chapters_today(db, company_id))
-                missing = [c for c in PROMOTION_PREREQUISITE_CHAPTERS if c not in cleared_today]
-                if missing:
-                    raise ValidationError(
-                        error_code="PREREQUISITE_CHAPTERS_NOT_CLEARED",
-                        message=f"プロモーション申請を行うには、先に他{len(missing)}個の問題をすべてクリアする必要があります",
-                        field="type",
-                    )
-
             AssertionRuleEvaluator().evaluate(
                 application_type=data.type,
                 target_field="description",

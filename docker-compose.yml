@@ -14,6 +14,8 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://gameday_user:gameday_password@gameday_workflow_db:5432/gameday_workflow_application}
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
       - USER_SERVICE_API_KEY=${USER_SERVICE_API_KEY:-InternalServiceApiKeyForGameDayWorkflow2024!}
+      - GAME_MASTER_SERVICE_BASE_URL=${GAME_MASTER_SERVICE_BASE_URL:-http://gameday-workflow-game-master-service:8006}
+      - GAME_MASTER_SERVICE_API_KEY=${GAME_MASTER_SERVICE_API_KEY:-InternalServiceApiKeyForGameDayWorkflow2024!}
       - DEBUG=${DEBUG:-false}
     volumes:
       - ./app:/app/app  # 開発時にコード変更を反映

@@ -8,7 +8,7 @@ from app.api.dependencies import get_db_dependency, get_current_user_dependency
 from app.services.application_service import ApplicationService
 from app.services.workflow_service import WorkflowService
 from app.services.user_service import UserService
-from app.services.game_progress_service import GameProgressService
+from app.services.game_master_client import GameMasterClient
 from app.services.validation_service import ValidationError
 from app.models.application import ApplicationStatus
 from pydantic import BaseModel, Field
@@ -34,7 +34,7 @@ def _apply_game_progress_on_approval(db: Session, application, token: Optional[s
             company_id = applicant_info.get("CompanyId") or applicant_info.get("companyId")
         if company_id is not None:
             company_id = str(company_id)
-        GameProgressService.apply_approved_application(db, application, company_id)
+            GameMasterClient.apply_approved_application(company_id, application.type, application.days)
     except Exception as e:
         logger.error(
             f"ApprovalService: game_progress更新中にエラーが発生しました - "
