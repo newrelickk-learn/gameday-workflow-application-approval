@@ -254,6 +254,7 @@ class ApplicationService:
             logger.error(f"ApplicationService: ワークフロー開始中にエラーが発生しました: {e}")
 
         chapter = CHAPTER_BY_APPLICATION_TYPE.get(application_data.type)
+        incorrect_chapter = None
         if chapter == 1:
             is_chapter1_target = applicant_info.get("IsChapter1Target")
             if is_chapter1_target is None:
@@ -263,6 +264,9 @@ class ApplicationService:
             elif not GameMasterClient.check_dependency_chain_answer(
                 token, application_data.dependency_chain or []
             ):
+                # 依存関係チェーンの回答を間違えた場合は、クリアを記録しない代わりに
+                # 不正解として記録し、スコアの減点対象にする。
+                incorrect_chapter = chapter
                 chapter = None
         elif chapter == 3:
             departure_matches = application_data.departure_city_name == UNSTABLE_CITY_NAME
@@ -274,6 +278,11 @@ class ApplicationService:
                 GameMasterClient.mark_chapter_cleared(str(company_id), chapter)
             except Exception as e:
                 logger.error(f"ApplicationService: chapter_progressの記録に失敗しました: {e}")
+        elif incorrect_chapter is not None:
+            try:
+                GameMasterClient.mark_chapter_incorrect(str(company_id), incorrect_chapter)
+            except Exception as e:
+                logger.error(f"ApplicationService: 不正解の記録に失敗しました: {e}")
 
         return application
     

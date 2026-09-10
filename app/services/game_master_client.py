@@ -101,6 +101,31 @@ class GameMasterClient:
             return False
 
     @staticmethod
+    def mark_chapter_incorrect(company_id: str, chapter: int) -> bool:
+        """指定した会社の不正解を記録する(スコア集計の減点対象)。
+        POST /internal/chapters/{chapter}/mark-incorrect をX-API-Keyで呼ぶ。
+        すでに当日クリア済みの章はgame-master側で減点対象外になる。
+        """
+        if not HTTPX_AVAILABLE:
+            return False
+
+        try:
+            url = f"{settings.game_master_service_base_url}/api/v1/internal/chapters/{chapter}/mark-incorrect"
+            headers = {
+                "X-API-Key": settings.game_master_service_api_key,
+                "Content-Type": "application/json",
+            }
+            response = httpx.post(url, headers=headers, json={"companyId": company_id}, timeout=5.0)
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            logger.error(
+                f"GameMasterClient: mark-incorrect呼び出しに失敗しました。"
+                f"company_id={company_id}, chapter={chapter}, error={e}"
+            )
+            return False
+
+    @staticmethod
     def apply_approved_application(
         company_id: str, application_type: str, days: Optional[int]
     ) -> Optional[int]:
