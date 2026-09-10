@@ -56,27 +56,6 @@ class GameMasterClient:
             return []
 
     @staticmethod
-    def check_dependency_chain_answer(token: Optional[str], dependency_chain: List[str]) -> bool:
-        """第1章のサービス依存関係チェーン回答が正解かどうかを判定する。
-        POST /chapters/1/check-dependency-chain を呼ぶ(判定結果のみ、chapter_progressへの
-        記録はここでは行わない)。
-        """
-        if not HTTPX_AVAILABLE or not token:
-            return False
-
-        try:
-            url = f"{settings.game_master_service_base_url}/api/v1/chapters/1/check-dependency-chain"
-            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-            response = httpx.post(
-                url, headers=headers, json={"dependencyChain": dependency_chain}, timeout=5.0
-            )
-            response.raise_for_status()
-            return bool(response.json().get("correct", False))
-        except Exception as e:
-            logger.error(f"GameMasterClient: check-dependency-chain呼び出しに失敗しました: {e}")
-            return False
-
-    @staticmethod
     def mark_chapter_cleared(company_id: str, chapter: int) -> bool:
         """指定した会社の章クリアを記録する。
         POST /internal/chapters/{chapter}/mark-cleared をX-API-Keyで呼ぶ。

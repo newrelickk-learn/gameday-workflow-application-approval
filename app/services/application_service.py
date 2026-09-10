@@ -14,7 +14,6 @@ from app.services.validation_service import ValidationError
 from app.services.game_master_client import GameMasterClient
 
 CHAPTER_BY_APPLICATION_TYPE = {
-    ApplicationType.EXPENSE.value: 1,
     ApplicationType.BUSINESS_TRIP.value: 3,
     ApplicationType.PROMOTION.value: 5,
 }
@@ -255,20 +254,7 @@ class ApplicationService:
 
         chapter = CHAPTER_BY_APPLICATION_TYPE.get(application_data.type)
         incorrect_chapter = None
-        if chapter == 1:
-            is_chapter1_target = applicant_info.get("IsChapter1Target")
-            if is_chapter1_target is None:
-                is_chapter1_target = applicant_info.get("isChapter1Target")
-            if not is_chapter1_target:
-                chapter = None
-            elif not GameMasterClient.check_dependency_chain_answer(
-                token, application_data.dependency_chain or []
-            ):
-                # 依存関係チェーンの回答を間違えた場合は、クリアを記録しない代わりに
-                # 不正解として記録し、スコアの減点対象にする。
-                incorrect_chapter = chapter
-                chapter = None
-        elif chapter == 3:
+        if chapter == 3:
             departure_matches = application_data.departure_city_name == UNSTABLE_CITY_NAME
             arrival_matches = application_data.arrival_city_name == UNSTABLE_CITY_NAME
             if not (departure_matches or arrival_matches):

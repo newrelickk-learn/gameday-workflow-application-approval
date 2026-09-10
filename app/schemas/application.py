@@ -18,11 +18,6 @@ class ApplicationBase(BaseModel):
 
 
 class CreateApplicationRequest(ApplicationBase):
-    dependency_chain: Optional[List[str]] = Field(
-        None,
-        alias="dependencyChain",
-        description="経費申請: サービス依存関係チェーンの回答（任意）",
-    )
     departure_city_name: Optional[str] = Field(
         None,
         alias="departureCityName",
