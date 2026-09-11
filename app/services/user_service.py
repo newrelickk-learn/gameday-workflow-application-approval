@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 import logging
 
 try:
@@ -56,7 +56,7 @@ class UserService:
             return None
     
     @staticmethod
-    def get_user_info(user_id: str, token: Optional[str] = None) -> Optional[dict]:
+    def get_user_info(user_id: Optional[str], token: Optional[str] = None) -> Optional[dict]:
         user_id = str(user_id).strip() if user_id is not None else ""
         if settings.user_service_use_stub:
             logger.info(f"UserService: スタブ実装を使用（設定による）。user_id={user_id}")
@@ -103,7 +103,7 @@ class UserService:
             }
             if token:
                 headers["Authorization"] = f"Bearer {token}"
-            params = [("ids", uid) for uid in ids]
+            params: List[Tuple[str, Any]] = [("ids", uid) for uid in ids]
 
             logger.info(f"UserService: バッチ取得APIを呼び出し中: {url}, ids_count={len(ids)}")
             response = httpx.get(url, headers=headers, params=params, timeout=10.0)

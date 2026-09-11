@@ -1,8 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+from typing import Any, Dict, Generator
 from app.core.config import settings
 
-_engine_kwargs = {"pool_pre_ping": True}
+_engine_kwargs: Dict[str, Any] = {"pool_pre_ping": True}
 if not settings.database_url.startswith("sqlite"):
     _engine_kwargs["pool_size"] = 10
     _engine_kwargs["max_overflow"] = 20
@@ -12,7 +13,7 @@ engine = create_engine(settings.database_url, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def get_db() -> Session:
+def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db

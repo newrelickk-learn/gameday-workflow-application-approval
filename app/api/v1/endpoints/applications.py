@@ -5,13 +5,13 @@ from sqlalchemy.orm import Session
 import newrelic.agent
 
 from app.api.dependencies import get_db_dependency, get_current_user_dependency
-
-logger = logging.getLogger(__name__)
 from app.schemas.application import Application, CreateApplicationRequest, ErrorResponse
 from app.services.application_service import ApplicationService
 from app.services.validation_service import ValidationService, ValidationError
 from app.services.user_service import UserService
 from app.models.application import ApplicationStatus
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -223,7 +223,7 @@ async def create_application(
         
         token = current_user.get("_token")
         
-        ValidationService.validate_application(application_data, user_id, token, db)
+        ValidationService.validate_application(application_data, user_id, db, token)
         
         application = ApplicationService.create_application(
             db=db,

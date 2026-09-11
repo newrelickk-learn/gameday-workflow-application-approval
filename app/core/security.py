@@ -39,7 +39,7 @@ def _user_id_from_payload(payload: dict) -> Optional[str]:
 
 def verify_token(token: str) -> dict:
     if token.startswith("mock-jwt-token-") or token.startswith("user-") or token.startswith("test-user-"):
-        user_id = _fallback_user_id_from_token(token)
+        user_id: Optional[str] = _fallback_user_id_from_token(token)
         user_id = _normalize_user_id(user_id)
         if not user_id:
             raise HTTPException(
@@ -56,8 +56,8 @@ def verify_token(token: str) -> dict:
         logger.warning("JWT payload に user_id に相当するクレームがありません: keys=%s", list(payload.keys()))
 
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id = _user_id_from_payload(payload)
+        verified_payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        user_id = _user_id_from_payload(verified_payload)
         if user_id:
             return {"sub": user_id, "user_id": user_id}
     except JWTError:

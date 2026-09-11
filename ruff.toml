@@ -1,0 +1,13 @@
+# 以下はいずれも「そう書かないと動かない」箇所のため、コード側は変えずに除外する。
+[lint.per-file-ignores]
+# New Relicのエージェントはアプリのimportより先にinitializeしないと計装が効かない。
+"app/main.py" = ["E402"]
+# alembicの慣例通り、app配下をimportする前にsys.pathを通す必要がある。
+"alembic/env.py" = ["E402"]
+"scripts/init_db.py" = ["E402"]
+# settingsがimport時に環境変数を読むため、app.mainのimportより先に環境変数を設定する。
+# Applicationモデルのimportは、Base.metadata.create_allにテーブルを認識させるためで、
+# 直接参照しないが消すとテスト用DBのテーブルが作られなくなる。
+"tests/conftest.py" = ["E402", "F401"]
+# SQLAlchemyのカラム比較なので`== True`が必要。`is True`だとSQLに変換されない。
+"app/services/rules/evaluator.py" = ["E712"]

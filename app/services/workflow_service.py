@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Dict, Optional
 import logging
 
 try:
@@ -168,7 +168,7 @@ class WorkflowService:
             if token:
                 headers["Authorization"] = f"Bearer {token}"
             
-            params = {
+            params: Dict[str, Any] = {
                 "applicationType": workflow_type,
             }
             if company_id:

@@ -161,8 +161,8 @@ class ValidationService:
     def validate_application(
         data: CreateApplicationRequest,
         user_id: str,
+        db: Session,
         token: Optional[str] = None,
-        db: Optional[Session] = None
     ) -> None:
         ValidationService.validate_application_type(data.type, user_id, token)
 
