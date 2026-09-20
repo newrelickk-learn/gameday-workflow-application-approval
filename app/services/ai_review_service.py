@@ -14,7 +14,7 @@ GameDay当日にAWS側で問題が起きても演習が止まらないよう、�
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 import json
 import logging
 
@@ -44,10 +44,11 @@ SYSTEM_PROMPT = """あなたは日本企業の出張申請をチェックする�
 必ず次のJSONだけを出力してください。説明文やコードブロックは付けないでください。
 {"approved": true または false, "reason": "差し戻す場合は、何を追記すればよいかを申請者への敬体の日本語で1〜2文。通す場合は空文字"}"""
 
-_client = None
+# boto3のクライアントは型情報を持たないためAnyで保持する(未生成の間はNone)。
+_client: Optional[Any] = None
 
 
-def _get_client():
+def _get_client() -> Any:
     """Bedrock Runtimeクライアント(遅延生成・使い回し)。"""
     global _client
     if _client is None:
