@@ -31,7 +31,9 @@ class Settings(BaseSettings):
     # AI_REVIEW_ENABLED=false で無効化できる。
     ai_review_enabled: bool = True
     ai_review_region: str = "ap-northeast-1"
-    ai_review_model_id: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
+    # このモデルはオンデマンド(素のモデルID)では呼べず、推論プロファイル経由が必須。
+    # jp.* は日本国内のリージョン間でルーティングされるシステム定義プロファイル。
+    ai_review_model_id: str = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
     ai_review_timeout_seconds: float = 5.0
     ai_review_connect_timeout_seconds: float = 2.0
 
