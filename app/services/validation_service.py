@@ -7,6 +7,7 @@ from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService
 from app.services.rules.evaluator import AssertionRuleEvaluator
 from app.services.game_master_client import GameMasterClient
+from app.services.ai_review_service import AiReviewService
 
 PROMOTION_PREREQUISITE_CHAPTERS = [0, 1, 2, 3, 4]
 
@@ -158,6 +159,26 @@ class ValidationService:
         return str(company_id)
 
     @staticmethod
+    def validate_ai_review(data: CreateApplicationRequest) -> None:
+        """出張申請の説明文をAIレビュアーに確認してもらう。
+
+        目的・訪問先・業務内容が具体的に書かれていない申請は差し戻す。
+        AWS側の障害時はAiReviewServiceが通す側に倒すため、ここでは結果をそのまま使う。
+        """
+        result = AiReviewService.review_business_trip(
+            title=data.title,
+            description=data.description,
+            departure_city_name=data.departure_city_name,
+            arrival_city_name=data.arrival_city_name,
+        )
+        if not result.approved:
+            raise ValidationError(
+                error_code="AI_REVIEW_REJECTED",
+                message=result.reason or AiReviewService.FALLBACK_REASON,
+                field="description",
+            )
+
+    @staticmethod
     def validate_application(
         data: CreateApplicationRequest,
         user_id: str,
@@ -176,6 +197,9 @@ class ValidationService:
         ValidationService.validate_dates(data.type, data.start_date, data.end_date, virtual_today)
 
         ValidationService.validate_business_rules(data)
+
+        if data.type == ApplicationType.BUSINESS_TRIP.value:
+            ValidationService.validate_ai_review(data)
 
         if data.type != ApplicationType.PROMOTION.value and data.applicant_id != user_id:
             raise ValidationError(

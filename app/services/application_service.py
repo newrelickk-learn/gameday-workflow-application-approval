@@ -12,9 +12,11 @@ from app.services.user_service import UserService, ManagerNotFoundError
 from app.services.workflow_service import WorkflowService
 from app.services.validation_service import ValidationError
 from app.services.game_master_client import GameMasterClient
+from app.services import hidden_quest_token
 
+# 申請の作成でクリアになるメインストリームのクエスト。国内出張(章3)は原因診断クイズに
+# 正解した時点でクリアになるため、ここには含めない(申請成立の側は裏クエスト扱い)。
 CHAPTER_BY_APPLICATION_TYPE = {
-    ApplicationType.BUSINESS_TRIP.value: 3,
     ApplicationType.PROMOTION.value: 5,
 }
 
@@ -24,8 +26,6 @@ APPLICATION_NUMBER_PREFIX_BY_TYPE = {
     ApplicationType.VACATION.value: "VC",
     ApplicationType.PROMOTION.value: "PR",
 }
-
-UNSTABLE_CITY_NAME = "北九州"
 
 logger = logging.getLogger(__name__)
 
@@ -253,22 +253,21 @@ class ApplicationService:
             logger.error(f"ApplicationService: ワークフロー開始中にエラーが発生しました: {e}")
 
         chapter = CHAPTER_BY_APPLICATION_TYPE.get(application_data.type)
-        incorrect_chapter = None
-        if chapter == 3:
-            departure_matches = application_data.departure_city_name == UNSTABLE_CITY_NAME
-            arrival_matches = application_data.arrival_city_name == UNSTABLE_CITY_NAME
-            if not (departure_matches or arrival_matches):
-                chapter = None
         if chapter is not None:
             try:
                 GameMasterClient.mark_chapter_cleared(str(company_id), chapter)
             except Exception as e:
                 logger.error(f"ApplicationService: chapter_progressの記録に失敗しました: {e}")
-        elif incorrect_chapter is not None:
-            try:
-                GameMasterClient.mark_chapter_incorrect(str(company_id), incorrect_chapter)
-            except Exception as e:
-                logger.error(f"ApplicationService: 不正解の記録に失敗しました: {e}")
+
+        # 裏クエストのクリアはここからgame-masterを呼ばず、署名付きトークンをレスポンスに
+        # 載せてブラウザ経由で記録してもらう(申請のトレースにgame-masterを混ぜないため)。
+        # DBには保存されない一時的な属性として持たせ、レスポンススキーマから読ませる。
+        token = hidden_quest_token.issue_for_application_type(
+            str(company_id) if company_id is not None else None,
+            application_data.type,
+        )
+        # ApplicationモデルにはDBカラムとして存在しないため、setattrで一時的に持たせる。
+        setattr(application, "hidden_quest_tokens", [token] if token else None)
 
         return application
     

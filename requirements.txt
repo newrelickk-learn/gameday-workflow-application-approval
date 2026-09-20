@@ -8,4 +8,6 @@ python-multipart==0.0.6
 alembic==1.12.1
 psycopg2-binary==2.9.9
 httpx==0.25.2
+# 出張申請のAIレビュー(Amazon Bedrock Converse API)で使う
+boto3==1.34.162
 newrelic==11.5.0
