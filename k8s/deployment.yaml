@@ -15,6 +15,10 @@ spec:
       labels:
         app: gameday-workflow-application-approval
     spec:
+      # 出張申請のAIレビューでBedrockを呼ぶため、EKS Pod Identityで権限を渡す。
+      # このクラスタの他サービス(nrdojo/dojo-web-pod等)と同じ方式。
+      # ServiceAccountとIAMロールの関連付けはk8s/serviceaccount.yamlのコメントを参照。
+      serviceAccountName: gameday-workflow-application-approval
       containers:
         - name: gameday-workflow-application-approval
           # CIのdeploy.ymlが `kubectl set image` で実際のECRイメージに差し替える。初回applyのみこのタグが使われる。
@@ -41,6 +45,14 @@ spec:
               value: "http://gameday-workflow-user:80"
             - name: GAME_MASTER_SERVICE_BASE_URL
               value: "http://gameday-workflow-game-master:8006"
+            # 出張申請の説明文をレビューするAI(Amazon Bedrock)。当日止めたくなったら
+            # kubectl set env deployment/... AI_REVIEW_ENABLED=false で無効化できる。
+            - name: AI_REVIEW_ENABLED
+              value: "true"
+            - name: AI_REVIEW_REGION
+              value: "ap-northeast-1"
+            - name: AI_REVIEW_MODEL_ID
+              value: "anthropic.claude-haiku-4-5-20251001-v1:0"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

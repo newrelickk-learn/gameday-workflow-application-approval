@@ -45,6 +45,11 @@ class Application(ApplicationBase):
     receipt_image_urls: Optional[List[str]] = Field(None, alias="receiptImageUrls", description="経費精算のレシート画像URL一覧（表示用）")
     created_at: datetime = Field(..., alias="createdAt", description="作成日時")
     updated_at: datetime = Field(..., alias="updatedAt", description="更新日時")
+    hidden_quest_tokens: Optional[List[str]] = Field(
+        None,
+        alias="hiddenQuestTokens",
+        description="裏クエストのクリア引換券。ブラウザがgame-masterへクリアを記録しに行くために使う（DBには保存しない）",
+    )
 
     model_config = ConfigDict(
         from_attributes=True,

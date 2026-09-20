@@ -6,6 +6,9 @@ import pytest
 os.environ.setdefault("USER_SERVICE_USE_STUB", "true")
 os.environ.setdefault("WORKFLOW_SERVICE_USE_STUB", "true")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+# AIレビューはBedrockへの外部呼び出しなので、既定では無効にしてテストを外部依存から切る。
+# レビューそのものの挙動はtest_ai_review_service.pyでクライアントをモックして検証する。
+os.environ.setdefault("AI_REVIEW_ENABLED", "false")
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session

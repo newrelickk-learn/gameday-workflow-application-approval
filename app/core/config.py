@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     game_master_service_base_url: str = "http://gameday-workflow-game-master:8006"
     game_master_service_api_key: str = "InternalServiceApiKeyForGameDayWorkflow2024!"
 
+    # 出張申請の説明文をレビューするAI(Amazon Bedrock)。GameDay当日に止めたくなったら
+    # AI_REVIEW_ENABLED=false で無効化できる。
+    ai_review_enabled: bool = True
+    ai_review_region: str = "ap-northeast-1"
+    ai_review_model_id: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
+    ai_review_timeout_seconds: float = 5.0
+    ai_review_connect_timeout_seconds: float = 2.0
+
     class Config:
         env_file = ".env"
         case_sensitive = False
