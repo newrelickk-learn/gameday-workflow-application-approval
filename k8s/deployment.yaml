@@ -51,9 +51,10 @@ spec:
               value: "true"
             - name: AI_REVIEW_REGION
               value: "ap-northeast-1"
-            # 素のモデルIDはオンデマンド非対応のため、推論プロファイル(jp.*)を指定する
+            # 素のモデルIDはオンデマンド非対応のため、推論プロファイル(jp.*)を指定する。
+            # Haiku 4.5はこのアカウントでモデルアクセスが無効なのでSonnet 4.5を使う。
             - name: AI_REVIEW_MODEL_ID
-              value: "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
+              value: "jp.anthropic.claude-sonnet-4-5-20250929-v1:0"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

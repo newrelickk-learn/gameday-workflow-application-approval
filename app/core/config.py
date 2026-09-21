@@ -31,10 +31,13 @@ class Settings(BaseSettings):
     # AI_REVIEW_ENABLED=false で無効化できる。
     ai_review_enabled: bool = True
     ai_review_region: str = "ap-northeast-1"
-    # このモデルはオンデマンド(素のモデルID)では呼べず、推論プロファイル経由が必須。
-    # jp.* は日本国内のリージョン間でルーティングされるシステム定義プロファイル。
-    ai_review_model_id: str = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
-    ai_review_timeout_seconds: float = 5.0
+    # 推論プロファイル(jp.*)経由で呼ぶ。素のモデルIDはオンデマンド非対応。
+    # Haiku 4.5はこのAWSアカウントでモデルアクセスが無効(AccessDeniedException)のため、
+    # 有効になっているSonnet 4.5を使う。Haikuを使いたい場合はBedrockのモデルアクセスを
+    # 有効化してからこの値を戻す。
+    ai_review_model_id: str = "jp.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    # Sonnetでのレビューは実測で3秒前後かかるため、余裕を持たせる。
+    ai_review_timeout_seconds: float = 8.0
     ai_review_connect_timeout_seconds: float = 2.0
 
     class Config:
