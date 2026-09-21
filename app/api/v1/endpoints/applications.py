@@ -9,6 +9,7 @@ from app.schemas.application import Application, CreateApplicationRequest, Error
 from app.services.application_service import ApplicationService
 from app.services.validation_service import ValidationService, ValidationError
 from app.services.user_service import UserService
+from app.services.remediation_service import RemediationService, FEATURE_APPROVED_LIST_SLOW
 from app.models.application import ApplicationStatus
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,12 @@ async def get_applications(
         if user_role:
             newrelic.agent.add_custom_attribute('user_role', user_role)
         
+        # ランブックの暫定対応を適用済みの会社だけ、関連データをまとめて読み込む。
+        eager_load_related = RemediationService.is_applied(
+            db, current_company_id, FEATURE_APPROVED_LIST_SLOW
+        )
+        newrelic.agent.add_custom_attribute('remediation_applied', eager_load_related)
+
         applications = ApplicationService.get_applications(
             db=db,
             status=status,
@@ -79,6 +86,7 @@ async def get_applications(
             application_number=application_number,
             next_approver_id=next_approver_id,
             company_id=current_company_id if not applicant_id and not next_approver_id else None,
+            eager_load_related=eager_load_related,
         )
         
         newrelic.agent.add_custom_attribute('applications_count', len(applications))

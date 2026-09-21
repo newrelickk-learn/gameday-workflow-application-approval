@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 # 裏クエストの章番号。メインストリーム(0〜5)と衝突しないよう101番台を使う。
 HIDDEN_QUEST_EXPENSE = 101
 HIDDEN_QUEST_BUSINESS_TRIP = 102
+# ランブックの暫定対応を自分の会社に適用できたら達成
+HIDDEN_QUEST_APPROVED_LIST_REMEDIATION = 103
 
 HIDDEN_QUEST_BY_APPLICATION_TYPE = {
     # 上長を設定したうえで経費申請を出せたら達成

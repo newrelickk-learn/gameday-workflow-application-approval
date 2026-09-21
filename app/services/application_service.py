@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import and_
 from uuid import uuid4
 from datetime import datetime
@@ -287,9 +287,18 @@ class ApplicationService:
         next_approver_id: Optional[str] = None,
         company_id: Optional[int] = None,
         skip: int = 0,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        eager_load_related: bool = False,
     ) -> List[Application]:
         query = db.query(Application)
+
+        # 既定では関連(コメント・レシート)を遅延ロードするため、呼び出し側が行ごとに参照すると
+        # 件数に比例してクエリが増える。暫定対応が適用された会社だけ、まとめて読み込む。
+        if eager_load_related:
+            query = query.options(
+                selectinload(Application.comments),
+                selectinload(Application.receipt_images),
+            )
 
         filters = []
         if status:

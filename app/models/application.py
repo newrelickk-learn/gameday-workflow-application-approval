@@ -74,6 +74,23 @@ class Application(Base):
     receipt_images: Mapped[List["ApplicationReceiptImage"]] = relationship("ApplicationReceiptImage", lazy="select")
 
 
+class CompanyRemediation(Base):
+    """会社単位で適用した暫定対応の記録。
+
+    ランブック(gameday-workflow-docs/troubleshoot)の手順からアクセスされたときに1行作られ、
+    その会社の処理だけが是正された挙動に切り替わる。chapter_progressなどと同じく当日スコープで、
+    日次のリセットで消える。
+    """
+
+    __tablename__ = "company_remediations"
+
+    company_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    feature: Mapped[str] = mapped_column(String, primary_key=True)
+    applied_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class ApplicationNumberCounter(Base):
     __tablename__ = "application_number_counters"
 
