@@ -36,6 +36,14 @@ spec:
               value: "gameday-workflow-application-approval"
             - name: NEW_RELIC_CONFIG_FILE
               value: "/app/newrelic.ini"
+            # AIモニタリング。出張申請のAIレビュー(Bedrock Converse)を可視化する。
+            # Pythonエージェントは既定で無効なので明示的に有効にする。
+            - name: NEW_RELIC_AI_MONITORING_ENABLED
+              value: "true"
+            # プロンプトと応答の本文も記録する(既定でtrueだが、記録される旨を明示するため書いておく)。
+            # 実在の個人情報を含まない演習環境なので有効のままにする。
+            - name: NEW_RELIC_AI_MONITORING_RECORD_CONTENT_ENABLED
+              value: "true"
             # コード側のデフォルト値はdocker-compose用のコンテナ名（workflow-notification-service,
             # gameday_workflow_user_api, gameday-workflow-game-master）を指しており、k8s上の
             # 実際のService名とは異なるためDNS解決に失敗する。明示的に実際のService名を指定する。
