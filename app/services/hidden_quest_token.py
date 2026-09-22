@@ -35,6 +35,14 @@ HIDDEN_QUEST_BY_APPLICATION_TYPE = {
     ApplicationType.BUSINESS_TRIP.value: HIDDEN_QUEST_BUSINESS_TRIP,
 }
 
+# 裏クエストごとに必要な申請者のロール。Noneならロールを問わない。
+# 経費申請は「上長が未設定のエンジニアが、上長を設定したうえで申請できた」ことが達成条件なので、
+# 上長を持っているマネージャーの申請では達成にしない。
+REQUIRED_APPLICANT_ROLE_BY_HIDDEN_QUEST = {
+    HIDDEN_QUEST_EXPENSE: "engineer",
+    HIDDEN_QUEST_BUSINESS_TRIP: None,
+}
+
 TOKEN_TTL_SECONDS = 300
 
 
@@ -60,13 +68,28 @@ def issue(company_id: str, chapter: int, ttl_seconds: int = TOKEN_TTL_SECONDS) -
     return f"{payload_b64}.{_base64url_encode(signature)}"
 
 
-def issue_for_application_type(company_id: Optional[str], application_type: str) -> Optional[str]:
-    """申請タイプに対応する裏クエストがあればトークンを発行する。"""
+def issue_for_application_type(
+    company_id: Optional[str],
+    application_type: str,
+    applicant_role: Optional[str] = None,
+) -> Optional[str]:
+    """申請タイプに対応する裏クエストがあればトークンを発行する。
+
+    裏クエストによっては申請者のロールを条件にしているため、合致しない場合は発行しない。
+    """
     if company_id is None:
         return None
 
     chapter = HIDDEN_QUEST_BY_APPLICATION_TYPE.get(application_type)
     if chapter is None:
+        return None
+
+    required_role = REQUIRED_APPLICANT_ROLE_BY_HIDDEN_QUEST.get(chapter)
+    if required_role is not None and (applicant_role or "").lower() != required_role:
+        logger.info(
+            f"hidden_quest_token: 申請者のロールが条件に合わないため発行しません。"
+            f"chapter={chapter}, required={required_role}, actual={applicant_role}"
+        )
         return None
 
     return issue(str(company_id), chapter)

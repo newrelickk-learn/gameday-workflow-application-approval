@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from app.core.config import settings
 from app.services import hidden_quest_token
 import app.services.ai_review_service as ai_review_module
-from tests.conftest import ENGINEER_USER_ID, auth_headers
+from tests.conftest import ENGINEER_USER_ID, MANAGER_USER_ID, auth_headers
 from tests.test_ai_review_service import FakeBedrockClient
 
 
@@ -48,6 +48,23 @@ def test_expense_application_returns_a_hidden_quest_token(client):
     assert resp.status_code == 201
     tokens = resp.json().get("hiddenQuestTokens")
     assert tokens and len(tokens) == 1
+
+
+def test_expense_application_by_a_manager_returns_no_hidden_quest_token(client):
+    resp = client.post(
+        "/api/v1/applications",
+        json={
+            "type": "expense",
+            "title": "交通費精算",
+            "description": "出張時の交通費",
+            "amount": 50000,
+            "applicantId": MANAGER_USER_ID,
+        },
+        headers=auth_headers(MANAGER_USER_ID),
+    )
+
+    assert resp.status_code == 201
+    assert resp.json().get("hiddenQuestTokens") is None
 
 
 def test_vacation_application_returns_no_hidden_quest_token(client):

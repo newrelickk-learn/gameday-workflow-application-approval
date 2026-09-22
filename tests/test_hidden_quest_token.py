@@ -25,23 +25,30 @@ def recompute_signature(token: str, key: str) -> str:
     return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
 
 
-def test_expense_application_issues_a_token_for_hidden_quest_1():
-    token = hidden_quest_token.issue_for_application_type("1", "expense")
+def test_expense_application_by_an_engineer_issues_a_token_for_hidden_quest_1():
+    token = hidden_quest_token.issue_for_application_type("1", "expense", "engineer")
 
     assert token is not None
     assert decode_payload(token)["chapter"] == hidden_quest_token.HIDDEN_QUEST_EXPENSE
 
 
-def test_business_trip_application_issues_a_token_for_hidden_quest_2():
-    token = hidden_quest_token.issue_for_application_type("1", "business-trip")
+def test_expense_application_by_a_manager_does_not_issue_a_token():
+    # 上長が未設定のエンジニアが申請できるようになったことが達成条件のため、
+    # 最初から上長を持っているマネージャーの申請では達成にしない。
+    assert hidden_quest_token.issue_for_application_type("1", "expense", "manager") is None
+    assert hidden_quest_token.issue_for_application_type("1", "expense", None) is None
+
+
+def test_business_trip_application_issues_a_token_regardless_of_role():
+    token = hidden_quest_token.issue_for_application_type("1", "business-trip", "manager")
 
     assert token is not None
     assert decode_payload(token)["chapter"] == hidden_quest_token.HIDDEN_QUEST_BUSINESS_TRIP
 
 
 def test_other_application_types_do_not_issue_a_token():
-    assert hidden_quest_token.issue_for_application_type("1", "vacation") is None
-    assert hidden_quest_token.issue_for_application_type("1", "promotion") is None
+    assert hidden_quest_token.issue_for_application_type("1", "vacation", "engineer") is None
+    assert hidden_quest_token.issue_for_application_type("1", "promotion", "manager") is None
 
 
 def test_token_is_signed_with_the_shared_key():
@@ -62,4 +69,4 @@ def test_no_token_is_issued_without_a_signing_key(monkeypatch):
 
 
 def test_no_token_is_issued_without_a_company():
-    assert hidden_quest_token.issue_for_application_type(None, "expense") is None
+    assert hidden_quest_token.issue_for_application_type(None, "expense", "engineer") is None

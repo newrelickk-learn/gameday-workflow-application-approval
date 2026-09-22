@@ -265,6 +265,7 @@ class ApplicationService:
         token = hidden_quest_token.issue_for_application_type(
             str(company_id) if company_id is not None else None,
             application_data.type,
+            applicant_role,
         )
         # ApplicationモデルにはDBカラムとして存在しないため、setattrで一時的に持たせる。
         setattr(application, "hidden_quest_tokens", [token] if token else None)
