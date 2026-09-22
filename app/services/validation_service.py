@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 
 from app.models.application import ApplicationType
+from app.core.i18n import t
 from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService
 from app.services.rules.evaluator import AssertionRuleEvaluator
@@ -44,7 +45,7 @@ class ValidationService:
             if not UserService.is_manager(user_id, token):
                 raise ValidationError(
                     error_code="PERMISSION_DENIED",
-                    message="プロモーション申請は上長のみが申請可能です",
+                    message=t("promotion_manager_only"),
                     field="type"
                 )
     
@@ -59,20 +60,20 @@ class ValidationService:
             if not start_date:
                 raise ValidationError(
                     error_code="MISSING_REQUIRED_FIELD",
-                    message="開始日は必須です",
+                    message=t("start_date_required"),
                     field="startDate"
                 )
             if not end_date:
                 raise ValidationError(
                     error_code="MISSING_REQUIRED_FIELD",
-                    message="終了日は必須です",
+                    message=t("end_date_required"),
                     field="endDate"
                 )
             
             if start_date > end_date:
                 raise ValidationError(
                     error_code="INVALID_DATE_RANGE",
-                    message="開始日は終了日以前である必要があります",
+                    message=t("start_after_end"),
                     field="startDate"
                 )
             
@@ -83,7 +84,7 @@ class ValidationService:
                 if start_date < min_start_date:
                     raise ValidationError(
                         error_code="INSUFFICIENT_ADVANCE_NOTICE",
-                        message="出張申請は開始日の2週間前までに申請する必要があります",
+                        message=t("business_trip_advance_notice"),
                         field="startDate"
                     )
     
@@ -96,13 +97,13 @@ class ValidationService:
             if not data.start_date:
                 raise ValidationError(
                     error_code="MISSING_REQUIRED_FIELD",
-                    message="出張申請には開始日が必要です",
+                    message=t("business_trip_start_date_required"),
                     field="startDate"
                 )
             if not data.end_date:
                 raise ValidationError(
                     error_code="MISSING_REQUIRED_FIELD",
-                    message="出張申請には終了日が必要です",
+                    message=t("business_trip_end_date_required"),
                     field="endDate"
                 )
         
@@ -110,7 +111,7 @@ class ValidationService:
             if data.amount is None:
                 raise ValidationError(
                     error_code="MISSING_REQUIRED_FIELD",
-                    message="経費申請には金額が必要です",
+                    message=t("expense_amount_required"),
                     field="amount"
                 )
         
@@ -118,13 +119,13 @@ class ValidationService:
             if not data.start_date:
                 raise ValidationError(
                     error_code="MISSING_REQUIRED_FIELD",
-                    message="有給休暇申請には開始日が必要です",
+                    message=t("vacation_start_date_required"),
                     field="startDate"
                 )
             if not data.end_date:
                 raise ValidationError(
                     error_code="MISSING_REQUIRED_FIELD",
-                    message="有給休暇申請には終了日が必要です",
+                    message=t("vacation_end_date_required"),
                     field="endDate"
                 )
     
@@ -136,7 +137,7 @@ class ValidationService:
             if data.amount <= 0:
                 raise ValidationError(
                     error_code="INVALID_AMOUNT",
-                    message="金額は正の数である必要があります",
+                    message=t("amount_must_be_positive"),
                     field="amount"
                 )
         
@@ -144,7 +145,7 @@ class ValidationService:
             if data.days <= 0:
                 raise ValidationError(
                     error_code="INVALID_DAYS",
-                    message="日数は正の数である必要があります",
+                    message=t("days_must_be_positive"),
                     field="days"
                 )
     
@@ -174,7 +175,7 @@ class ValidationService:
         if not result.approved:
             raise ValidationError(
                 error_code="AI_REVIEW_REJECTED",
-                message=result.reason or AiReviewService.FALLBACK_REASON,
+                message=result.reason or AiReviewService.fallback_reason(),
                 field="description",
             )
 
@@ -204,7 +205,7 @@ class ValidationService:
         if data.type != ApplicationType.PROMOTION.value and data.applicant_id != user_id:
             raise ValidationError(
                 error_code="INVALID_APPLICANT_ID",
-                message="申請者IDは現在のユーザーIDと一致する必要があります",
+                message=t("applicant_mismatch"),
                 field="applicantId"
             )
 

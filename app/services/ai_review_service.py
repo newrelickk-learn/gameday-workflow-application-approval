@@ -21,6 +21,7 @@ import logging
 import newrelic.agent
 
 from app.core.config import settings
+from app.core.i18n import get_current_locale, t
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ try:
 except ImportError:  # boto3が無い環境(テスト等)ではAIレビューを行わない
     BOTO3_AVAILABLE = False
 
-SYSTEM_PROMPT = """あなたは日本企業の出張申請をチェックする審査担当者です。
+SYSTEM_PROMPT_JA = """あなたは日本企業の出張申請をチェックする審査担当者です。
 申請の「説明」欄に、出張の目的・訪問先・そこで行う業務内容が具体的に書かれているかを判定してください。
 
 差し戻す例:
@@ -43,6 +44,19 @@ SYSTEM_PROMPT = """あなたは日本企業の出張申請をチェックする�
 
 必ず次のJSONだけを出力してください。説明文やコードブロックは付けないでください。
 {"approved": true または false, "reason": "差し戻す場合は、何を追記すればよいかを申請者への敬体の日本語で1〜2文。通す場合は空文字"}"""
+
+SYSTEM_PROMPT_EN = """You review business trip applications at a company.
+Decide whether the "description" field concretely states the purpose of the trip, who or where the applicant will visit, and what work they will do there.
+
+Reject when:
+- It is empty, or says nothing (for example "Please approve" or "I am going on a trip")
+- It is vague, such as "for a meeting", where it is unclear who they meet or what they discuss
+
+Accept when:
+- At least the purpose and the work to be done can be read concretely
+
+Output only the following JSON. Do not add any explanation or code fences.
+{"approved": true or false, "reason": "If rejected, one or two polite sentences telling the applicant what to add. If accepted, an empty string"}"""
 
 # boto3のクライアントは型情報を持たないためAnyで保持する(未生成の間はNone)。
 _client: Optional[Any] = None
@@ -73,13 +87,13 @@ class AiReviewResult:
 
 class AiReviewService:
 
-    EMPTY_DESCRIPTION_REASON = (
-        "出張の目的・訪問先・そこで行う業務内容を説明欄に具体的に記入してください。"
-    )
+    @staticmethod
+    def empty_description_reason() -> str:
+        return t("ai_review_empty_description")
 
-    FALLBACK_REASON = (
-        "説明が具体的ではありません。出張の目的・訪問先・そこで行う業務内容を記入してください。"
-    )
+    @staticmethod
+    def fallback_reason() -> str:
+        return t("ai_review_fallback")
 
     @staticmethod
     def review_business_trip(
@@ -96,7 +110,7 @@ class AiReviewService:
         if description is None or not description.strip():
             newrelic.agent.add_custom_attribute("ai_review_approved", False)
             newrelic.agent.add_custom_attribute("ai_review_skipped", "empty_description")
-            return AiReviewResult(approved=False, reason=AiReviewService.EMPTY_DESCRIPTION_REASON)
+            return AiReviewResult(approved=False, reason=AiReviewService.empty_description_reason())
 
         if not BOTO3_AVAILABLE:
             logger.warning("AiReviewService: boto3が利用できないためAIレビューをスキップします")
@@ -106,9 +120,11 @@ class AiReviewService:
         prompt = AiReviewService._build_prompt(title, description, departure_city_name, arrival_city_name)
 
         try:
+            # 差し戻しの指摘は、参加者が読んでいる言語で返す。
+            system_prompt = SYSTEM_PROMPT_EN if get_current_locale() == "en" else SYSTEM_PROMPT_JA
             response = _get_client().converse(
                 modelId=settings.ai_review_model_id,
-                system=[{"text": SYSTEM_PROMPT}],
+                system=[{"text": system_prompt}],
                 messages=[{"role": "user", "content": [{"text": prompt}]}],
                 inferenceConfig={"maxTokens": 300, "temperature": 0.0},
             )
@@ -133,8 +149,13 @@ class AiReviewService:
         departure_city_name: Optional[str],
         arrival_city_name: Optional[str],
     ) -> str:
+        heading = (
+            "Review the following business trip application."
+            if get_current_locale() == "en"
+            else "次の出張申請を審査してください。"
+        )
         lines = [
-            "次の出張申請を審査してください。",
+            heading,
             f"タイトル: {title or '(未入力)'}",
             f"出発地: {departure_city_name or '(未指定)'}",
             f"到着地: {arrival_city_name or '(未指定)'}",
@@ -164,18 +185,18 @@ class AiReviewService:
         end = payload.rfind("}")
         if start == -1 or end == -1:
             logger.warning(f"AiReviewService: JSONとして解釈できない応答でした: {text[:200]}")
-            return AiReviewResult(approved=False, reason=AiReviewService.FALLBACK_REASON)
+            return AiReviewResult(approved=False, reason=AiReviewService.fallback_reason())
 
         try:
             parsed = json.loads(payload[start:end + 1])
         except json.JSONDecodeError:
             logger.warning(f"AiReviewService: JSONの解析に失敗しました: {text[:200]}")
-            return AiReviewResult(approved=False, reason=AiReviewService.FALLBACK_REASON)
+            return AiReviewResult(approved=False, reason=AiReviewService.fallback_reason())
 
         approved = bool(parsed.get("approved"))
         reason = parsed.get("reason") or None
 
         return AiReviewResult(
             approved=approved,
-            reason=None if approved else (reason or AiReviewService.FALLBACK_REASON),
+            reason=None if approved else (reason or AiReviewService.fallback_reason()),
         )

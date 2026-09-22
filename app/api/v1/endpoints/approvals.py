@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import newrelic.agent
 
 from app.api.dependencies import get_db_dependency, get_current_user_dependency
+from app.core.i18n import t
 from app.services.application_service import ApplicationService
 from app.services.workflow_service import WorkflowService
 from app.services.user_service import UserService
@@ -136,7 +137,7 @@ async def update_approval(
                     newrelic.agent.add_custom_attribute('application_status', 'approved')
                     return UpdateApprovalResponse(
                         success=True,
-                        message="承認が完了し、申請が承認されました",
+                        message=t("approval_completed"),
                         application_status="approved"
                     )
                 else:
@@ -196,7 +197,7 @@ async def update_approval(
                         newrelic.agent.add_custom_attribute('application_status', 'approved')
                         return UpdateApprovalResponse(
                             success=True,
-                            message="承認が完了し、申請が承認されました",
+                            message=t("approval_completed"),
                             application_status="approved"
                         )
 
@@ -231,7 +232,7 @@ async def update_approval(
                 newrelic.agent.add_custom_attribute('application_status', 'approved')
                 return UpdateApprovalResponse(
                     success=True,
-                    message="承認が完了し、申請が承認されました",
+                    message=t("approval_completed"),
                     application_status="approved"
                 )
         elif request.status == "rejected":
@@ -242,7 +243,7 @@ async def update_approval(
             newrelic.agent.add_custom_attribute('application_status', 'rejected')
             return UpdateApprovalResponse(
                 success=True,
-                message="申請が却下されました",
+                message=t("application_rejected"),
                 application_status="rejected"
             )
         else:

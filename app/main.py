@@ -1,13 +1,14 @@
 import newrelic.agent
 newrelic.agent.initialize()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.i18n import set_current_locale
 from app.db.base import Base
 from app.db.session import engine
 
@@ -38,6 +39,13 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+@app.middleware("http")
+async def resolve_locale(request: Request, call_next):
+    """表示言語をリクエストごとに決める。フロントは選択中の言語をAccept-Languageで送る。"""
+    set_current_locale(request.headers.get("accept-language"))
+    return await call_next(request)
+
 
 app.add_middleware(
     CORSMiddleware,

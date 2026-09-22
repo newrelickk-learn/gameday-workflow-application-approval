@@ -7,6 +7,7 @@ import logging
 import newrelic.agent
 
 from app.models.application import Application, ApplicationStatus, ApplicationType, ApplicationNumberCounter
+from app.core.i18n import t
 from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService, ManagerNotFoundError
 from app.services.workflow_service import WorkflowService
@@ -114,7 +115,7 @@ class ApplicationService:
                 )
                 raise ValidationError(
                     error_code="APPROVER_NOT_FOUND",
-                    message="承認者が見つかりません",
+                    message=t("approver_not_found"),
                     field="applicantId",
                 )
 

@@ -41,7 +41,7 @@ def test_empty_description_is_rejected_without_calling_bedrock(enable_ai_review,
     result = AiReviewService.review_business_trip(title="出張", description="   ")
 
     assert result.approved is False
-    assert result.reason == AiReviewService.EMPTY_DESCRIPTION_REASON
+    assert result.reason == AiReviewService.empty_description_reason()
     assert client.calls == []
 
 
@@ -87,7 +87,7 @@ def test_unparseable_response_is_rejected_with_the_fallback_reason(enable_ai_rev
     result = AiReviewService.review_business_trip(title="出張", description="行きます")
 
     assert result.approved is False
-    assert result.reason == AiReviewService.FALLBACK_REASON
+    assert result.reason == AiReviewService.fallback_reason()
 
 
 def test_bedrock_failure_lets_the_application_through(enable_ai_review, monkeypatch):
@@ -107,3 +107,17 @@ def test_disabled_flag_skips_the_review_entirely(monkeypatch):
 
     assert result.approved is True
     assert client.calls == []
+
+
+def test_review_reason_follows_the_display_language(enable_ai_review, monkeypatch):
+    from app.core.i18n import set_current_locale
+
+    use_client(monkeypatch, FakeBedrockClient(text='{"approved": true}'))
+    try:
+        set_current_locale("en")
+        result = AiReviewService.review_business_trip(title="Trip", description="   ")
+        assert result.approved is False
+        # 空欄の差し戻しは表示言語に合わせて英語で返る
+        assert result.reason == "Describe the purpose of the trip, who you will visit, and what you will do there."
+    finally:
+        set_current_locale("ja")
