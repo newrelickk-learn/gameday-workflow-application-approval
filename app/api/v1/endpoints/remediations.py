@@ -11,13 +11,13 @@ URLが提示される。フロントのランブックページがこのAPIを�
 from typing import Optional
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status as http_status
+from fastapi import APIRouter, Depends, Header, HTTPException, status as http_status
 from sqlalchemy.orm import Session
 import newrelic.agent
 
 from app.api.dependencies import get_db_dependency, get_current_user_dependency
 from app.schemas.application import ErrorResponse
-from app.services.game_master_client import GameMasterClient
+from app.services import game_master_tokens
 from app.services.remediation_service import RemediationService, FEATURE_APPROVED_LIST_SLOW
 from app.services.user_service import UserService
 from app.services import hidden_quest_token
@@ -85,6 +85,7 @@ async def get_approved_list_remediation(
 async def apply_approved_list_remediation(
     db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
+    game_state_token: Optional[str] = Header(None, alias=game_master_tokens.GAME_STATE_HEADER),
 ) -> dict:
     newrelic.agent.set_transaction_name('/v0.1/remediations/approved-list-slow')
 
@@ -104,7 +105,9 @@ async def apply_approved_list_remediation(
         return {"applied": True, "alreadyApplied": True, "reason": None, "hiddenQuestTokens": None}
 
     # 原因の切り分けが終わっていない環境には適用しない。
-    cleared_chapters = GameMasterClient.get_cleared_chapters_today(token)
+    # クリア済みの章は、frontendがgame-masterから取得して添えてきたスナップショットで判定する。
+    game_state = game_master_tokens.verify_game_state(game_state_token, user_id)
+    cleared_chapters = game_state.cleared_chapters if game_state is not None else []
     if INVESTIGATION_CHAPTER not in cleared_chapters:
         newrelic.agent.add_custom_attribute('remediation_result', 'investigation_incomplete')
         logger.info(

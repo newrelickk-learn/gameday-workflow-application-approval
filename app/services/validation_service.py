@@ -7,7 +7,7 @@ from app.core.i18n import t
 from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService
 from app.services.rules.evaluator import AssertionRuleEvaluator
-from app.services.game_master_client import GameMasterClient
+from app.services.game_master_tokens import GameState
 from app.services.ai_review_service import AiReviewService
 
 PROMOTION_PREREQUISITE_CHAPTERS = [0, 1, 2, 3, 4]
@@ -185,16 +185,20 @@ class ValidationService:
         user_id: str,
         db: Session,
         token: Optional[str] = None,
+        game_state: Optional[GameState] = None,
     ) -> None:
+        """game_stateはfrontendがgame-masterから取得して添えてきたスナップショット。
+        取得・検証できなかった場合はNoneで、game-masterに問い合わせられなかったときと同じ扱いになる
+        (仮想日付は実際の今日、クリア済みの章はなし)。
+        """
         ValidationService.validate_application_type(data.type, user_id, token)
 
         ValidationService.validate_required_fields(data.type, data)
 
         virtual_today = None
         if data.type == ApplicationType.BUSINESS_TRIP.value:
-            offset_days = GameMasterClient.get_game_progress(token)
-            if offset_days is not None:
-                virtual_today = date.today() + timedelta(days=offset_days)
+            if game_state is not None:
+                virtual_today = date.today() + timedelta(days=game_state.virtual_date_offset_days)
         ValidationService.validate_dates(data.type, data.start_date, data.end_date, virtual_today)
 
         ValidationService.validate_business_rules(data)
@@ -210,7 +214,7 @@ class ValidationService:
             )
 
         if data.type == ApplicationType.PROMOTION.value:
-            cleared_today = set(GameMasterClient.get_cleared_chapters_today(token))
+            cleared_today = set(game_state.cleared_chapters) if game_state is not None else set()
             missing = [c for c in PROMOTION_PREREQUISITE_CHAPTERS if c not in cleared_today]
             if missing:
                 raise ValidationError(
