@@ -1,23 +1,18 @@
-"""裏クエストのクリア引換券(HMAC署名付きトークン)の発行。
+"""章クリアの引換券(HMAC署名付きトークン)の発行。
 
-裏クエストは「申請が成立したこと」自体が達成条件だが、ここからgame-masterを直接呼ぶと
-申請のトレースにgame-masterが混ざってしまう。そこで申請レスポンスに署名付きトークンだけを
-載せ、ブラウザがそれを持ってgame-masterへクリアを記録しに行く形にしている。
+裏クエストやプロモーション(章5)は「申請が成立したこと」自体が達成条件だが、ここから
+game-masterを直接呼ぶと申請のトレースにgame-masterが混ざってしまう。そこで申請レスポンスに
+署名付きトークンだけを載せ、frontendがそれを持ってgame-masterへクリアを記録しに行く形にしている。
 
-署名鍵はサービス間通信で既に共有しているgame_master_service_api_key(=game-master側の
-INTERNAL_API_KEY)を流用する。署名が無いとブラウザから任意の章を「クリアした」と
-申告できてしまうため、鍵が未設定の場合はトークンを発行しない。
+署名が無いとブラウザから任意の章を「クリアした」と申告できてしまうため、鍵が未設定の場合は
+トークンを発行しない(signed_token)。
 """
 
 from typing import Optional
-import base64
-import hmac
-import hashlib
-import json
 import logging
 import time
 
-from app.core.config import settings
+from app.services import signed_token
 from app.models.application import ApplicationType
 
 logger = logging.getLogger(__name__)
@@ -46,26 +41,10 @@ REQUIRED_APPLICANT_ROLE_BY_HIDDEN_QUEST = {
 TOKEN_TTL_SECONDS = 300
 
 
-def _base64url_encode(raw: bytes) -> str:
-    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
-
-
 def issue(company_id: str, chapter: int, ttl_seconds: int = TOKEN_TTL_SECONDS) -> Optional[str]:
-    key = settings.game_master_service_api_key or ""
-    if not key:
-        logger.warning("hidden_quest_token: 署名鍵が未設定のためトークンを発行しません")
-        return None
-
-    payload = json.dumps(
-        {"companyId": str(company_id), "chapter": chapter, "exp": int(time.time()) + ttl_seconds},
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-
-    payload_b64 = _base64url_encode(payload)
-    signature = hmac.new(key.encode("utf-8"), payload_b64.encode("ascii"), hashlib.sha256).digest()
-
-    return f"{payload_b64}.{_base64url_encode(signature)}"
+    return signed_token.sign(
+        {"companyId": str(company_id), "chapter": chapter, "exp": int(time.time()) + ttl_seconds}
+    )
 
 
 def issue_for_application_type(

@@ -51,8 +51,6 @@ spec:
               value: "http://gameday-workflow-workflow-notification:8003"
             - name: USER_SERVICE_BASE_URL
               value: "http://gameday-workflow-user:80"
-            - name: GAME_MASTER_SERVICE_BASE_URL
-              value: "http://gameday-workflow-game-master:8006"
             # 出張申請の説明文をレビューするAI(Amazon Bedrock)。当日止めたくなったら
             # kubectl set env deployment/... AI_REVIEW_ENABLED=false で無効化できる。
             - name: AI_REVIEW_ENABLED
@@ -78,6 +76,8 @@ spec:
                 secretKeyRef:
                   name: gameday-workflow-application-approval-secrets
                   key: user-service-api-key
+            # game-masterとやり取りする署名付きトークンの署名鍵(game-master側のINTERNAL_API_KEYと同じ値)。
+            # game-masterを直接呼ぶことはない。
             - name: GAME_MASTER_SERVICE_API_KEY
               valueFrom:
                 secretKeyRef:

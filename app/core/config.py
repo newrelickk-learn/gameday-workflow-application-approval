@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     workflow_service_base_url: str = "http://workflow-notification-service:8003"
     workflow_service_use_stub: bool = False
 
-    game_master_service_base_url: str = "http://gameday-workflow-game-master:8006"
+    # game-masterとやり取りする署名付きトークン(signed_token)の署名鍵。game-masterを直接呼ぶことはない。
     game_master_service_api_key: str = "InternalServiceApiKeyForGameDayWorkflow2024!"
 
     # 出張申請の説明文をレビューするAI(Amazon Bedrock)。GameDay当日に止めたくなったら
