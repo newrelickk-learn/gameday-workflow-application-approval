@@ -190,12 +190,11 @@ class ValidationService:
 
         ValidationService.validate_required_fields(data.type, data)
 
-        virtual_today = None
-        if data.type == ApplicationType.BUSINESS_TRIP.value:
-            offset_days = GameMasterClient.get_game_progress(token)
-            if offset_days is not None:
-                virtual_today = date.today() + timedelta(days=offset_days)
-        ValidationService.validate_dates(data.type, data.start_date, data.end_date, virtual_today)
+        # 出張申請の14日前ルールはvirtual_today(実際の今日+game_progressの進行日数)を基準に
+        # 判定する設計だったが、game_progressに行を作る経路がどこにも無く常にoffset=0(会社の
+        # 進行が更新されない)。この呼び出しは何も変えずにgame-masterへのサーバー間呼び出しを
+        # 増やすだけだったため取り除き、実際の今日をそのまま基準にする(挙動は変わらない)。
+        ValidationService.validate_dates(data.type, data.start_date, data.end_date, date.today())
 
         ValidationService.validate_business_rules(data)
 

@@ -21,25 +21,6 @@ class GameMasterClient:
     """
 
     @staticmethod
-    def get_game_progress(token: Optional[str]) -> Optional[int]:
-        """ログイン中ユーザーのcompany_idに対応するvirtual_date_offset_daysを取得する。
-        GET /game-progress をユーザーのJWTをそのまま転送して呼ぶ(company_idはgame-master側で
-        トークンから解決される)。
-        """
-        if not HTTPX_AVAILABLE or not token:
-            return None
-
-        try:
-            url = f"{settings.game_master_service_base_url}/api/v1/game-progress"
-            headers = {"Authorization": f"Bearer {token}"}
-            response = httpx.get(url, headers=headers, timeout=5.0)
-            response.raise_for_status()
-            return response.json().get("virtualDateOffsetDays")
-        except Exception as e:
-            logger.error(f"GameMasterClient: game-progress取得に失敗しました: {e}")
-            return None
-
-    @staticmethod
     def get_cleared_chapters_today(token: Optional[str]) -> List[int]:
         """本日クリア済みの章番号一覧を取得する。GET /chapters/progress を呼ぶ。"""
         if not HTTPX_AVAILABLE or not token:

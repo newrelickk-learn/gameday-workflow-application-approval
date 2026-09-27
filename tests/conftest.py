@@ -59,8 +59,6 @@ ACCOUNTING_USER_ID = "16051"
 # ここで差し替えて、テストからはgame-masterへのHTTPを一切出さないようにする。
 @pytest.fixture(autouse=True)
 def stub_game_master(monkeypatch) -> None:
-    # 仮想時間は進めない(game-master不在時の実装と同じNone)
-    monkeypatch.setattr(GameMasterClient, "get_game_progress", lambda *args, **kwargs: None)
     # 前提章の判定でapproval側のテストが止まらないよう、必要な章はクリア済みとして返す。
     # 前提章そのものの検証はgame-master側の責務なのでここでは扱わない。
     monkeypatch.setattr(
