@@ -11,7 +11,8 @@ import pytest
 
 from app.api.v1.endpoints.remediations import INVESTIGATION_CHAPTER
 from app.services import hidden_quest_token
-from app.services.game_master_client import GameMasterClient
+from app.services import game_master_tokens
+from app.services.game_master_tokens import GameState
 from app.services.remediation_service import RemediationService, FEATURE_APPROVED_LIST_SLOW
 from tests.conftest import ENGINEER_USER_ID, MANAGER_USER_ID, auth_headers, TestSessionLocal
 
@@ -21,15 +22,17 @@ ENDPOINT = "/api/v1/remediations/approved-list-slow"
 @pytest.fixture
 def investigation_done(monkeypatch):
     monkeypatch.setattr(
-        GameMasterClient,
-        "get_cleared_chapters_today",
-        lambda *args, **kwargs: [0, INVESTIGATION_CHAPTER],
+        game_master_tokens,
+        "verify_game_state",
+        lambda *args, **kwargs: GameState("1", 0, [0, INVESTIGATION_CHAPTER]),
     )
 
 
 @pytest.fixture
 def investigation_not_done(monkeypatch):
-    monkeypatch.setattr(GameMasterClient, "get_cleared_chapters_today", lambda *args, **kwargs: [0])
+    monkeypatch.setattr(
+        game_master_tokens, "verify_game_state", lambda *args, **kwargs: GameState("1", 0, [0])
+    )
 
 
 @pytest.fixture(autouse=True)

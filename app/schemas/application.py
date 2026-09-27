@@ -50,6 +50,11 @@ class Application(ApplicationBase):
         alias="hiddenQuestTokens",
         description="裏クエストのクリア引換券。ブラウザがgame-masterへクリアを記録しに行くために使う（DBには保存しない）",
     )
+    chapter_clear_tokens: Optional[List[str]] = Field(
+        None,
+        alias="chapterClearTokens",
+        description="メインストリームの章クリアの引換券。frontendがgame-masterへクリアを記録するために使う（DBには保存しない）",
+    )
 
     model_config = ConfigDict(
         from_attributes=True,

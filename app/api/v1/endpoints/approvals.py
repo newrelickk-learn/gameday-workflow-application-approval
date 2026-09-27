@@ -9,7 +9,7 @@ from app.core.i18n import t
 from app.services.application_service import ApplicationService
 from app.services.workflow_service import WorkflowService
 from app.services.user_service import UserService
-from app.services.game_master_client import GameMasterClient
+from app.services import game_master_tokens
 from app.services.validation_service import ValidationError
 from app.models.application import ApplicationStatus
 from pydantic import BaseModel, Field
@@ -27,20 +27,28 @@ class ApproverNotFoundException(HTTPException):
         )
 
 
-def _apply_game_progress_on_approval(db: Session, application, token: Optional[str]) -> None:
+def _issue_game_progress_token(application, token: Optional[str]) -> Optional[str]:
+    """承認完了した申請で仮想時間を進めるためのトークンを発行する。
+
+    ここからgame-masterを呼ぶと承認のトレースにgame-masterが混ざるため、トークンを
+    レスポンスに載せてfrontendからgame-masterへ届けてもらう。
+    """
     try:
         applicant_info = UserService.get_user_info(application.applicant_id, token)
         company_id = None
         if applicant_info:
             company_id = applicant_info.get("CompanyId") or applicant_info.get("companyId")
-        if company_id is not None:
-            company_id = str(company_id)
-            GameMasterClient.apply_approved_application(company_id, application.type, application.days)
+        if company_id is None:
+            return None
+        return game_master_tokens.issue_approved_application(
+            str(company_id), application.type, application.days
+        )
     except Exception as e:
         logger.error(
-            f"ApprovalService: game_progress更新中にエラーが発生しました - "
+            f"ApprovalService: game_progress更新用トークンの発行中にエラーが発生しました - "
             f"application_id={getattr(application, 'id', None)}, error={e}"
         )
+        return None
 
 
 class UpdateApprovalRequest(BaseModel):
@@ -58,6 +66,11 @@ class UpdateApprovalResponse(BaseModel):
     success: bool = Field(..., description="更新成功フラグ")
     message: str = Field(..., description="レスポンスメッセージ")
     application_status: Optional[str] = Field(None, alias="applicationStatus", description="更新後の申請ステータス")
+    game_progress_token: Optional[str] = Field(
+        None,
+        alias="gameProgressToken",
+        description="承認完了で仮想時間を進めるためのトークン。frontendがgame-masterへ届ける",
+    )
 
     class Config:
         populate_by_name = True
@@ -131,14 +144,15 @@ async def update_approval(
                     db.commit()
                     db.refresh(application)
 
-                    _apply_game_progress_on_approval(db, application, token)
+                    game_progress_token = _issue_game_progress_token(application, token)
 
                     logger.info(f"ApprovalService: 申請を承認しました（全ステップ完了） - application_id={request.application_id}")
                     newrelic.agent.add_custom_attribute('application_status', 'approved')
                     return UpdateApprovalResponse(
                         success=True,
                         message=t("approval_completed"),
-                        application_status="approved"
+                        application_status="approved",
+                        game_progress_token=game_progress_token,
                     )
                 else:
                     applicant_info = UserService.get_user_info(application.applicant_id, token)
@@ -191,14 +205,15 @@ async def update_approval(
                         db.commit()
                         db.refresh(application)
 
-                        _apply_game_progress_on_approval(db, application, token)
+                        game_progress_token = _issue_game_progress_token(application, token)
 
                         logger.info(f"ApprovalService: 申請を承認しました（全ステップ完了） - application_id={request.application_id}")
                         newrelic.agent.add_custom_attribute('application_status', 'approved')
                         return UpdateApprovalResponse(
                             success=True,
                             message=t("approval_completed"),
-                            application_status="approved"
+                            application_status="approved",
+                            game_progress_token=game_progress_token,
                         )
 
                     application.current_step = next_step
@@ -226,14 +241,15 @@ async def update_approval(
                     db, request.application_id, ApplicationStatus.APPROVED
                 )
 
-                _apply_game_progress_on_approval(db, application, token)
+                game_progress_token = _issue_game_progress_token(application, token)
 
                 logger.info(f"ApprovalService: 申請を承認しました（ステップ情報なし） - application_id={request.application_id}")
                 newrelic.agent.add_custom_attribute('application_status', 'approved')
                 return UpdateApprovalResponse(
                     success=True,
                     message=t("approval_completed"),
-                    application_status="approved"
+                    application_status="approved",
+                    game_progress_token=game_progress_token,
                 )
         elif request.status == "rejected":
             ApplicationService.update_application_status(

@@ -1,6 +1,6 @@
 from typing import List, Optional
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status as http_status, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, status as http_status, Query
 from sqlalchemy.orm import Session
 import newrelic.agent
 
@@ -10,6 +10,7 @@ from app.services.application_service import ApplicationService
 from app.services.validation_service import ValidationService, ValidationError
 from app.services.user_service import UserService
 from app.services.remediation_service import RemediationService, FEATURE_APPROVED_LIST_SLOW
+from app.services import game_master_tokens
 from app.models.application import ApplicationStatus
 
 logger = logging.getLogger(__name__)
@@ -205,6 +206,7 @@ async def create_application(
     application_data: CreateApplicationRequest,
     db: Session = Depends(get_db_dependency),
     current_user: dict = Depends(get_current_user_dependency),
+    game_state_token: Optional[str] = Header(None, alias=game_master_tokens.GAME_STATE_HEADER),
 ) -> Application:
     newrelic.agent.set_transaction_name('/v0.1/create_application')
     
@@ -231,7 +233,8 @@ async def create_application(
         
         token = current_user.get("_token")
         
-        ValidationService.validate_application(application_data, user_id, db, token)
+        game_state = game_master_tokens.verify_game_state(game_state_token, user_id)
+        ValidationService.validate_application(application_data, user_id, db, token, game_state)
         
         application = ApplicationService.create_application(
             db=db,

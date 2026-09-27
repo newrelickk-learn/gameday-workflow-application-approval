@@ -12,7 +12,6 @@ from app.schemas.application import CreateApplicationRequest
 from app.services.user_service import UserService, ManagerNotFoundError
 from app.services.workflow_service import WorkflowService
 from app.services.validation_service import ValidationError
-from app.services.game_master_client import GameMasterClient
 from app.services import hidden_quest_token
 
 # 申請の作成でクリアになるメインストリームのクエスト。国内出張(章3)は原因診断クイズに
@@ -253,12 +252,13 @@ class ApplicationService:
         except Exception as e:
             logger.error(f"ApplicationService: ワークフロー開始中にエラーが発生しました: {e}")
 
+        # 章クリア(プロモーション)もここからgame-masterを呼ばず、署名付きトークンをレスポンスに
+        # 載せてfrontendからgame-masterへ記録してもらう(申請のトレースにgame-masterを混ぜないため)。
         chapter = CHAPTER_BY_APPLICATION_TYPE.get(application_data.type)
-        if chapter is not None:
-            try:
-                GameMasterClient.mark_chapter_cleared(str(company_id), chapter)
-            except Exception as e:
-                logger.error(f"ApplicationService: chapter_progressの記録に失敗しました: {e}")
+        chapter_clear_token = (
+            hidden_quest_token.issue(str(company_id), chapter) if chapter is not None else None
+        )
+        setattr(application, "chapter_clear_tokens", [chapter_clear_token] if chapter_clear_token else None)
 
         # 裏クエストのクリアはここからgame-masterを呼ばず、署名付きトークンをレスポンスに
         # 載せてブラウザ経由で記録してもらう(申請のトレースにgame-masterを混ぜないため)。
