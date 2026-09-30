@@ -179,7 +179,7 @@ async def update_approval(
                             detail={"error": "COMPANY_ID_NOT_FOUND", "message": f"申請者のCompanyIdが取得できません: applicant_id={application.applicant_id}"}
                         )
 
-                    newrelic.agent.add_custom_attribute('company_id', company_id)
+                    newrelic.agent.add_custom_attribute('applicant_company_id', company_id)
 
                     try:
                         next_approver_id, next_approver_name, next_approver_department, _, _ = \

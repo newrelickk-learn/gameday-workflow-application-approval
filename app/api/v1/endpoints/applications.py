@@ -41,9 +41,7 @@ async def get_applications(
     
     try:
         token = current_user.get("_token")
-        user_id = current_user.get("user_id") or current_user.get("sub")
-        
-        newrelic.agent.add_custom_attribute('user_id', user_id)
+
         if status:
             status_value = status.value if hasattr(status, 'value') else str(status)
             newrelic.agent.add_custom_attribute('filter_status', status_value)
@@ -54,22 +52,13 @@ async def get_applications(
         if next_approver_id:
             newrelic.agent.add_custom_attribute('filter_next_approver_id', next_approver_id)
 
-        current_user_info = UserService.get_user_info(user_id, token)
+        current_user_info = current_user.get("_profile")
         if not current_user_info:
             raise HTTPException(
                 status_code=http_status.HTTP_401_UNAUTHORIZED,
                 detail={"error": "UNAUTHORIZED", "message": "ユーザー情報を取得できませんでした"},
             )
-        current_company_id = current_user_info.get("CompanyId") or current_user_info.get("companyId")
-        if current_company_id:
-            try:
-                current_company_id = int(current_company_id)
-            except (ValueError, TypeError):
-                logger.error(f"Invalid current_company_id: {current_company_id}")
-                current_company_id = None
-        
-        if current_company_id:
-            newrelic.agent.add_custom_attribute('company_id', current_company_id)
+        current_company_id = current_user.get("company_id")
         user_role = current_user_info.get("role")
         if user_role:
             newrelic.agent.add_custom_attribute('user_role', user_role)
@@ -154,26 +143,18 @@ async def get_applications_count(
 ) -> dict:
     newrelic.agent.set_transaction_name('/v0.1/applications/count')
     try:
-        token = current_user.get("_token")
-        user_id = current_user.get("user_id") or current_user.get("sub")
-        newrelic.agent.add_custom_attribute('user_id', user_id)
         if status:
             newrelic.agent.add_custom_attribute(
                 'filter_status', status.value if hasattr(status, 'value') else str(status)
             )
 
-        current_user_info = UserService.get_user_info(user_id, token)
+        current_user_info = current_user.get("_profile")
         if not current_user_info:
             raise HTTPException(
                 status_code=http_status.HTTP_401_UNAUTHORIZED,
                 detail={"error": "UNAUTHORIZED", "message": "ユーザー情報を取得できませんでした"},
             )
-        current_company_id = current_user_info.get("CompanyId") or current_user_info.get("companyId")
-        if current_company_id:
-            try:
-                current_company_id = int(current_company_id)
-            except (ValueError, TypeError):
-                current_company_id = None
+        current_company_id = current_user.get("company_id")
 
         count = ApplicationService.count_applications(
             db=db, status=status, company_id=current_company_id

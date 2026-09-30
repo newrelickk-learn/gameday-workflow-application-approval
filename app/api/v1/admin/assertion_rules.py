@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_db_dependency, get_current_user_dependency
-from app.services.user_service import UserService
 from app.models.assertion_rule import AssertionRule
 
 logger = logging.getLogger(__name__)
@@ -40,12 +39,7 @@ class AssertionRuleResponse(BaseModel):
 
 
 def _resolve_company_id(current_user: dict) -> Optional[str]:
-    token = current_user.get("_token")
-    user_id = current_user.get("user_id") or current_user.get("sub")
-    user_info = UserService.get_user_info(user_id, token)
-    if not user_info:
-        return None
-    company_id = user_info.get("CompanyId") or user_info.get("companyId")
+    company_id = current_user.get("company_id")
     if company_id is None:
         return None
     return str(company_id)
